@@ -1,0 +1,845 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Creative Team Output — Portfolio Demo</title>
+<style>
+  :root {
+    --font-anthropic-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --font-anthropic-serif: Georgia, "Times New Roman", serif;
+    --color-bg: #f7f7f5; --color-panel: #ffffff; --color-fg: #1f1e1d; --color-fg-muted: #6b6a66;
+    --color-border-line: #e3e2de; --color-ok: #2f7d4f; --color-warn: #9a6a00; --color-bad: #b42318;
+    --cds-gap-xs: 4px; --cds-gap-sm: 8px; --cds-gap-md: 16px; --cds-gap-lg: 24px; --cds-gap-xl: 32px;
+    --cds-pad-xs: 4px; --cds-pad-sm: 8px; --cds-pad-md: 12px; --cds-pad-lg: 20px;
+    --cds-radius: 8px; --cds-font-size-caption: 12px; --cds-font-size-body: 14px;
+    --cds-font-size-heading: 16px; --cds-font-size-title: 30px; --cds-font-weight-medium: 500;
+    --cds-chart-grid: #ecebe8; --cds-chart-axis: #c9c8c3; --cds-surface-popover: #ffffff;
+    --cds-border: #e3e2de; --cds-shadow-popover: 0 4px 16px rgba(0,0,0,.12);
+    --cds-text-secondary: #6b6a66; --cds-dur-slow: 300ms;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --color-bg: #1c1b1a; --color-panel: #262523; --color-fg: #ecebe8; --color-fg-muted: #a3a29d;
+      --color-border-line: #3a3936; --color-ok: #6cc28f; --color-warn: #e0b04c; --color-bad: #f07a6e;
+      --cds-chart-grid: #33322f; --cds-chart-axis: #55534f; --cds-surface-popover: #2e2d2a;
+      --cds-border: #3a3936; --cds-text-secondary: #a3a29d;
+      color-scheme: dark;
+    }
+  }
+  body { margin: 0; background: var(--color-bg); color: var(--color-fg); font-family: var(--font-anthropic-sans); font-size: 14px; }
+  #dash-root { max-width: 1200px; margin: 0 auto; padding: 24px max(16px, env(safe-area-inset-left, 0px)) 48px max(16px, env(safe-area-inset-right, 0px)); }
+  .dash-skeleton { color: transparent; }
+  [hidden] { display: none !important; }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script>
+(function () {
+  const ROWS = [{"row":1,"received":"2026-09-01","brand":"Demo Brand A","task":"Campaign concepts","assigned":"2026-09-02","designer":"Designer A","copywriter":"Writer A","resized_by":null,"copies":null,"creative_copy":2,"meta_copy":2,"pmax_copy":1,"main":2,"resized":0,"total":2,"completed":null,"status":"Main Templates In-Progress Designer","days":null,"notes":null},{"row":2,"received":"2026-09-03","brand":"Demo Brand B","task":"Placement adaptations","assigned":"2026-09-04","designer":"Designer B","copywriter":"Writer B","resized_by":null,"copies":null,"creative_copy":3,"meta_copy":2,"pmax_copy":1,"main":3,"resized":6,"total":9,"completed":"2026-09-07","status":"Delivered & Completed","days":3,"notes":null},{"row":3,"received":"2026-09-05","brand":"Demo Brand C","task":"Social campaign","assigned":"2026-09-06","designer":"Designer A","copywriter":"Writer A","resized_by":null,"copies":null,"creative_copy":4,"meta_copy":2,"pmax_copy":1,"main":4,"resized":6,"total":10,"completed":"2026-09-09","status":"Delivered & Completed","days":3,"notes":null},{"row":4,"received":"2026-09-07","brand":"Demo Brand A","task":"Email creative","assigned":"2026-09-08","designer":"Designer B","copywriter":"Writer B","resized_by":null,"copies":null,"creative_copy":2,"meta_copy":2,"pmax_copy":1,"main":2,"resized":0,"total":2,"completed":null,"status":"Main Templates In-Progress Designer","days":null,"notes":null},{"row":5,"received":"2026-09-09","brand":"Demo Brand B","task":"Campaign concepts","assigned":"2026-09-10","designer":"Designer A","copywriter":"Writer A","resized_by":null,"copies":null,"creative_copy":3,"meta_copy":2,"pmax_copy":1,"main":3,"resized":6,"total":9,"completed":"2026-09-13","status":"Delivered & Completed","days":3,"notes":null},{"row":6,"received":"2026-09-11","brand":"Demo Brand C","task":"Placement adaptations","assigned":"2026-09-12","designer":"Designer B","copywriter":"Writer B","resized_by":null,"copies":null,"creative_copy":4,"meta_copy":2,"pmax_copy":1,"main":4,"resized":6,"total":10,"completed":"2026-09-15","status":"Delivered & Completed","days":3,"notes":null},{"row":7,"received":"2026-09-13","brand":"Demo Brand A","task":"Social campaign","assigned":"2026-09-14","designer":"Designer A","copywriter":"Writer A","resized_by":null,"copies":null,"creative_copy":2,"meta_copy":2,"pmax_copy":1,"main":2,"resized":0,"total":2,"completed":null,"status":"Main Templates In-Progress Designer","days":null,"notes":null},{"row":8,"received":"2026-09-15","brand":"Demo Brand B","task":"Email creative","assigned":"2026-09-16","designer":"Designer B","copywriter":"Writer B","resized_by":null,"copies":null,"creative_copy":3,"meta_copy":2,"pmax_copy":1,"main":3,"resized":6,"total":9,"completed":"2026-09-19","status":"Delivered & Completed","days":3,"notes":null}];
+  const calcs = {}, draws = {};
+  let params = { month: 'All' }, cache = {};
+  const light = ['#2c6fbb', '#e07b39', '#3a9a5b', '#8a5cc2', '#c9497a', '#2a9d9a', '#b8953a', '#6b7280'];
+  const dark = ['#6aa6e8', '#f0a06a', '#6cc28f', '#b28ce6', '#e886ab', '#5cc9c5', '#dcbc66', '#9ca3af'];
+  const isDark = () => window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const runAll = () => Object.keys(draws).forEach((n) => runDraw(n));
+  const runDraw = (name) => document.querySelectorAll('[data-draw="' + name + '"]').forEach((el) => {
+    try { draws[name](el); } catch (e) { console.error(name, e); }
+  });
+  window.dash = {
+    get colors() { return isDark() ? dark : light; },
+    calc(id, o) { calcs[id] = o; },
+    loader() {},
+    data(id) {
+      if (id === 'tasks') return { status: 'ok', data: ROWS, columns: Object.keys(ROWS[0] || {}) };
+      if (!calcs[id]) return { status: 'missing', data: [] };
+      if (!cache[id]) cache[id] = calcs[id].fn(...calcs[id].inputs.map((i) => window.dash.data(i).data));
+      return { status: 'ok', data: cache[id] };
+    },
+    onData(fn) { fn(); },
+    draw(name, fn) { if (fn) draws[name] = fn; else runDraw(name); },
+    params() { return { ...params }; },
+    setParams(p) { params = { ...params, ...p }; runAll(); },
+    resetParams() { params = { month: 'All' }; runAll(); },
+    setLink() {},
+    refresh() {},
+    __runAll: runAll,
+  };
+  let t;
+  window.addEventListener('resize', () => { clearTimeout(t); t = setTimeout(runAll, 150); });
+})();
+</script>
+</head>
+<body><div style="padding:14px 24px;background:#233dff;color:white;font:600 13px system-ui;text-align:center">PORTFOLIO DEMO · All people, brands and figures below are illustrative sample data.</div>
+<div id="dash-root">
+
+<style>
+  .ct { display: grid; gap: var(--cds-gap-xl); font-family: var(--font-anthropic-sans); }
+  .ct-head { display: grid; gap: var(--cds-gap-sm); }
+  .ct-headrow { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: var(--cds-gap-md); }
+  .ct-title { margin: 0; font-family: var(--font-anthropic-serif); font-weight: 400; font-size: var(--cds-font-size-title); text-wrap: balance; }
+  .ct-take { margin: 0; color: var(--color-fg-muted); font-size: var(--cds-font-size-body); max-width: 65ch; }
+  .ct-take b { color: var(--color-fg); font-weight: 600; }
+  .ct-period { display: flex; align-items: center; gap: var(--cds-gap-sm); font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+  .ct-period select { font: inherit; color: var(--color-fg); background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: var(--cds-pad-xs) var(--cds-pad-sm); min-width: 9rem; }
+
+  .ct-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 9.5rem), 1fr)); gap: var(--cds-gap-md); }
+  .ct-kpi { display: grid; gap: var(--cds-gap-xs); align-content: start; padding: var(--cds-pad-md) 0; border-top: 1px solid var(--color-border-line); }
+  .ct-kpi-label { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+  .ct-kpi-value { font-family: var(--font-anthropic-serif); font-weight: 400; font-size: var(--cds-font-size-title); font-variant-numeric: tabular-nums; line-height: 1.1; min-height: 1.1em; }
+  .ct-kpi-note { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+
+  .ct-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr)); gap: var(--cds-gap-md); }
+  .ct-card { background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: var(--cds-pad-lg); display: grid; gap: var(--cds-gap-md); align-content: start; min-width: 0; }
+  .ct-card h2 { margin: 0; font-size: var(--cds-font-size-heading); font-weight: var(--cds-font-weight-medium); }
+  .ct-note { margin: 0; font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+  .ct-cardhead { display: grid; gap: var(--cds-gap-xs); }
+
+  .ct-legend { display: flex; flex-wrap: wrap; gap: var(--cds-gap-md); font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+  .ct-legend span { display: inline-flex; align-items: center; gap: var(--cds-gap-xs); }
+  .ct-sw { display: inline-block; width: 0.625rem; height: 0.625rem; border-radius: 2px; flex: none; }
+
+  .ct-chart { position: relative; min-height: 8rem; }
+  .ct-chart-sm { min-height: 4rem; }
+  .ct-subhead { margin: 0; display: flex; align-items: center; gap: var(--cds-gap-xs); font-size: var(--cds-font-size-caption); font-weight: var(--cds-font-weight-medium); color: var(--color-fg-muted); }
+  .ct-chart svg { display: block; overflow: visible; }
+  .ct-chart text { font-family: var(--font-anthropic-sans); font-size: var(--cds-font-size-caption); fill: var(--color-fg-muted); }
+  .ct-chart .ct-lbl { fill: var(--color-fg); }
+  .ct-chart .ct-end { fill: var(--color-fg); font-variant-numeric: tabular-nums; }
+  .ct-chart .ct-grid-line { stroke: var(--cds-chart-grid); stroke-width: 1; }
+  .ct-chart .ct-axis-line { stroke: var(--cds-chart-axis); stroke-width: 1; }
+  .ct-tip { position: absolute; z-index: 2; pointer-events: none; background: var(--cds-surface-popover); border: 1px solid var(--cds-border); border-radius: var(--cds-radius); box-shadow: var(--cds-shadow-popover); padding: var(--cds-pad-xs) var(--cds-pad-sm); font-size: var(--cds-font-size-caption); white-space: nowrap; display: grid; gap: 2px; }
+  .ct-tip-head { color: var(--cds-text-secondary); }
+  .ct-tip div { display: flex; align-items: center; gap: var(--cds-gap-xs); }
+  .ct-tip b { font-variant-numeric: tabular-nums; margin-left: auto; padding-left: var(--cds-pad-sm); }
+  .ct-failed { display: flex; align-items: center; justify-content: center; gap: var(--cds-gap-xs); min-height: inherit; font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+  .ct-failed::before { content: ""; width: 0.375rem; height: 0.375rem; border-radius: 50%; background: var(--color-bad); }
+
+  .ct-tablewrap { overflow: auto; max-height: 32rem; min-width: 0; }
+  .ct-table { width: 100%; border-collapse: collapse; font-size: var(--cds-font-size-caption); font-variant-numeric: tabular-nums; }
+  .ct-table th, .ct-table td { text-align: left; padding: var(--cds-pad-xs) var(--cds-pad-sm); border-bottom: 1px solid var(--color-border-line); vertical-align: top; }
+  .ct-table th { position: sticky; top: 0; background: var(--color-panel); font-weight: var(--cds-font-weight-medium); color: var(--color-fg-muted); white-space: nowrap; }
+  .ct-table .num { text-align: right; }
+  .ct-table td.ct-task { min-width: 12rem; }
+  .ct-table td.ct-nowrap { white-space: nowrap; }
+  .ct-sort { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+  .ct-sort:hover, .ct-sort:focus-visible { color: var(--color-fg); }
+  th[aria-sort="ascending"] .ct-sort::after { content: " ↑"; }
+  th[aria-sort="descending"] .ct-sort::after { content: " ↓"; }
+  .ct-pill { display: inline-block; padding: 0 var(--cds-pad-xs); border: 1px solid currentColor; border-radius: 999px; white-space: nowrap; }
+  .ct-pill.is-done { color: var(--color-ok); }
+  .ct-pill.is-progress { color: var(--color-warn); }
+  .ct-pill.is-unassigned { color: var(--color-bad); }
+  .ct-search { font: inherit; font-size: var(--cds-font-size-caption); color: var(--color-fg); background: var(--color-bg); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: var(--cds-pad-xs) var(--cds-pad-sm); width: min(100%, 20rem); }
+  .ct-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--cds-gap-sm); }
+
+  [data-dash-source-state=refreshing] { opacity: .5; transition: opacity var(--cds-dur-slow); }
+  [data-dash-source-state=empty] { color: transparent; }
+</style>
+
+<div class="ct">
+  <header class="ct-head" id="overview">
+    <div class="ct-headrow">
+      <h1 class="ct-title">Creative team output</h1>
+      <label class="ct-period" for="ct-month">Period
+        <select id="ct-month" data-draw="month" data-source="kpis"></select>
+      </label>
+    </div>
+    <p class="ct-take">Most main banners designed <span data-draw="period">—</span>: <b data-draw="topname" data-source="by_designer" data-field="designer">—</b>, with <b data-draw="topval" data-source="by_designer" data-field="main">—</b> main banners.</p>
+    <p class="ct-take">Most resizes done <span data-draw="period">—</span>: <b data-draw="topname-resized" data-source="by_designer" data-field="designer">—</b>, with <b data-draw="topval-resized" data-source="by_designer" data-field="resized">—</b> resizes.</p>
+    <p class="ct-note">Interactive demonstration using illustrative sample data.</p>
+  </header>
+
+  <section class="ct-kpis" id="headline" aria-label="Headline figures">
+    <div class="ct-kpi">
+      <span class="ct-kpi-label">Main banners</span>
+      <span class="ct-kpi-value dash-skeleton" data-draw="kpi" data-source="kpis" data-field="main" data-fetchpriority="high">—</span>
+      <span class="ct-kpi-note">Original designs</span>
+    </div>
+    <div class="ct-kpi">
+      <span class="ct-kpi-label">Resizes</span>
+      <span class="ct-kpi-value dash-skeleton" data-draw="kpi" data-source="kpis" data-field="resized">—</span>
+      <span class="ct-kpi-note">Adapted from main banners</span>
+    </div>
+    <div class="ct-kpi">
+      <span class="ct-kpi-label">Copies written</span>
+      <span class="ct-kpi-value dash-skeleton" data-draw="kpi" data-source="kpis" data-field="copies">—</span>
+      <span class="ct-kpi-note">All copywriters</span>
+    </div>
+    <div class="ct-kpi">
+      <span class="ct-kpi-label">Tasks logged</span>
+      <span class="ct-kpi-value dash-skeleton" data-draw="kpi" data-source="kpis" data-field="tasks">—</span>
+      <span class="ct-kpi-note">By date received</span>
+    </div>
+    <div class="ct-kpi">
+      <span class="ct-kpi-label">Completed</span>
+      <span class="ct-kpi-value dash-skeleton" data-draw="kpi" data-source="kpis" data-field="completed">—</span>
+      <span class="ct-kpi-note">Tasks with a completion date</span>
+    </div>
+    <div class="ct-kpi">
+      <span class="ct-kpi-label">Still open</span>
+      <span class="ct-kpi-value dash-skeleton" data-draw="kpi" data-source="kpis" data-field="open">—</span>
+      <span class="ct-kpi-note">In progress or not assigned</span>
+    </div>
+    <div class="ct-kpi">
+      <span class="ct-kpi-label">Avg days to complete</span>
+      <span class="ct-kpi-value dash-skeleton" data-draw="kpi" data-source="kpis" data-field="avg_days">—</span>
+      <span class="ct-kpi-note">Received to completed</span>
+    </div>
+    <div class="ct-kpi">
+      <span class="ct-kpi-label">Brands served</span>
+      <span class="ct-kpi-value dash-skeleton" data-draw="kpi" data-source="kpis" data-field="brands">—</span>
+      <span class="ct-kpi-note">With at least one task</span>
+    </div>
+  </section>
+
+  <section class="ct-grid">
+    <article class="ct-card" id="by-designer">
+      <div class="ct-cardhead">
+        <h2>Work done by designer</h2>
+        <p class="ct-note">Interactive demonstration using illustrative sample data.</p>
+      </div>
+      <h3 class="ct-subhead"><i class="ct-sw ct-sw-main"></i>Main banners</h3>
+      <div class="ct-chart ct-chart-sm" data-draw="designers-main" data-source="by_designer"></div>
+      <h3 class="ct-subhead"><i class="ct-sw ct-sw-resized"></i>Resizes</h3>
+      <div class="ct-chart ct-chart-sm" data-draw="designers-resized" data-source="by_designer"></div>
+      <div class="ct-tablewrap">
+        <table class="ct-table" data-source="by_designer" data-row-key="key">
+          <thead><tr>
+            <th data-field="designer">Designer</th>
+            <th class="num" data-field="tasks">Tasks</th>
+            <th class="num" data-field="completed">Done</th>
+            <th class="num" data-field="open">Open</th>
+            <th class="num" data-field="main">Main banners</th>
+            <th class="num" data-field="resized">Resizes</th>
+          </tr></thead>
+          <tbody data-draw="designerrows"></tbody>
+        </table>
+      </div>
+    </article>
+
+    <article class="ct-card" id="by-brand">
+      <div class="ct-cardhead">
+        <h2>Workload by brand</h2>
+        <p class="ct-note">Main banners and resizes requested per brand, with the number of tasks behind them.</p>
+      </div>
+      <div class="ct-legend"><span><i class="ct-sw ct-sw-main"></i>Main banners</span><span><i class="ct-sw ct-sw-resized"></i>Resizes</span></div>
+      <div class="ct-chart" data-draw="brands" data-source="by_brand"></div>
+    </article>
+
+    <article class="ct-card" id="by-copywriter">
+      <div class="ct-cardhead">
+        <h2>Copy done by writer</h2>
+        <p class="ct-note">Copies per copywriter, from the tracker's Copywriter column.  A task shared by two writers counts half to each. Copies are Creative, Meta and Pmax copy added together.</p>
+      </div>
+      <div class="ct-legend"><span><i class="ct-sw ct-sw-copy"></i>Creative copy</span><span><i class="ct-sw ct-sw-meta"></i>Meta copy</span><span><i class="ct-sw ct-sw-pmax"></i>Pmax copy</span></div>
+      <div class="ct-chart" data-draw="copywriters" data-source="by_copywriter"></div>
+      <div class="ct-tablewrap">
+        <table class="ct-table" data-source="by_copywriter" data-row-key="key">
+          <thead><tr>
+            <th data-field="copywriter">Copywriter</th>
+            <th class="num" data-field="tasks">Tasks</th>
+            <th class="num" data-field="completed">Done</th>
+            <th class="num" data-field="open">Open</th>
+            <th class="num" data-field="creative_copy">Creative</th>
+            <th class="num" data-field="meta_copy">Meta</th>
+            <th class="num" data-field="pmax_copy">Pmax</th>
+            <th class="num" data-field="copies">Total</th>
+          </tr></thead>
+          <tbody data-draw="copywriterrows"></tbody>
+        </table>
+      </div>
+    </article>
+
+    <article class="ct-card" id="copy-by-brand">
+      <div class="ct-cardhead">
+        <h2>Copy by brand</h2>
+        <p class="ct-note">Copies written per brand, all copywriters together.</p>
+      </div>
+      <div class="ct-legend"><span><i class="ct-sw ct-sw-copy"></i>Copies</span></div>
+      <div class="ct-chart" data-draw="copies" data-source="by_brand"></div>
+    </article>
+  </section>
+
+  <article class="ct-card" id="weekly">
+    <div class="ct-cardhead">
+      <h2>Weekly flow</h2>
+      <p class="ct-note">Creatives received and completed each week (weeks start Monday), all time.</p>
+    </div>
+    <div class="ct-legend"><span><i class="ct-sw ct-sw-main"></i>Received</span><span><i class="ct-sw ct-sw-done"></i>Completed</span></div>
+    <div class="ct-chart" data-draw="weekly" data-source="weekly"></div>
+  </article>
+
+  <article class="ct-card" id="open-work">
+    <div class="ct-cardhead">
+      <h2>Open work</h2>
+      <p class="ct-note">Every task not yet completed, oldest first, whatever the period.</p>
+    </div>
+    <div class="ct-tablewrap">
+      <table class="ct-table" data-source="tasks" data-row-key="row">
+        <thead><tr>
+          <th class="num" data-field="row">#</th>
+          <th data-field="received">Received</th>
+          <th data-field="brand">Brand</th>
+          <th data-field="task">Task</th>
+          <th data-field="designer">Designer</th>
+          <th data-field="copywriter">Copywriter</th>
+          <th class="num" data-field="total">Creatives</th>
+          <th data-field="status">Status</th>
+        </tr></thead>
+        <tbody data-draw="openrows"></tbody>
+      </table>
+    </div>
+  </article>
+
+  <article class="ct-card" id="task-log">
+    <div class="ct-tools">
+      <div class="ct-cardhead">
+        <h2>Task log</h2>
+        <p class="ct-note">Tasks received in the chosen period. Select a column to sort.</p>
+      </div>
+      <input id="ct-search" class="ct-search" type="search" placeholder="Search brand, task or person" aria-label="Search tasks">
+    </div>
+    <div class="ct-tablewrap">
+      <table class="ct-table" data-source="tasks" data-row-key="row">
+        <thead><tr>
+          <th class="num" data-field="row"><button class="ct-sort" data-key="row">#</button></th>
+          <th data-field="received"><button class="ct-sort" data-key="received">Received</button></th>
+          <th data-field="brand"><button class="ct-sort" data-key="brand">Brand</button></th>
+          <th data-field="task"><button class="ct-sort" data-key="task">Task</button></th>
+          <th data-field="designer"><button class="ct-sort" data-key="designer">Designer</button></th>
+          <th data-field="copywriter"><button class="ct-sort" data-key="copywriter">Copywriter</button></th>
+          <th class="num" data-field="creative_copy"><button class="ct-sort" data-key="creative_copy">Creative copy</button></th>
+          <th class="num" data-field="meta_copy"><button class="ct-sort" data-key="meta_copy">Meta copy</button></th>
+          <th class="num" data-field="pmax_copy"><button class="ct-sort" data-key="pmax_copy">Pmax copy</button></th>
+          <th class="num" data-field="main"><button class="ct-sort" data-key="main">Main</button></th>
+          <th class="num" data-field="resized"><button class="ct-sort" data-key="resized">Resized</button></th>
+          <th class="num" data-field="total"><button class="ct-sort" data-key="total">Total</button></th>
+          <th data-field="status"><button class="ct-sort" data-key="status">Status</button></th>
+          <th data-field="completed"><button class="ct-sort" data-key="completed">Completed</button></th>
+          <th class="num" data-field="days"><button class="ct-sort" data-key="days">Days</button></th>
+        </tr></thead>
+        <tbody data-draw="taskrows"></tbody>
+      </table>
+    </div>
+  </article>
+</div>
+
+<script>
+  /* ---------- Calculations readers can inspect in Sources ---------- */
+  dash.calc('kpis', {
+    inputs: ['tasks'],
+    title: 'Headline figures by month',
+    description: 'Tasks, creatives (main banners and resizes), copies, completions, average days and brands for each month tasks were received, plus All.',
+    fn: (tasks) => {
+      const groups = new Map([['All', []]]);
+      for (const t of tasks) {
+        groups.get('All').push(t);
+        const m = /^\d{4}-\d{2}-\d{2}$/.test(t.received || '') ? t.received.slice(0, 7) : null;
+        if (m) (groups.get(m) || groups.set(m, []).get(m)).push(t);
+      }
+      const isDone = (t) => /complet|deliver/i.test(t.status || '') || !!t.completed;
+      const copiesOf = (t) => t.copies ?? ((t.creative_copy || 0) + (t.meta_copy || 0) + (t.pmax_copy || 0));
+      const total = (t) => t.total ?? ((t.main || 0) + (t.resized || 0));
+      return [...groups].map(([month, ts]) => {
+        const done = ts.filter(isDone);
+        const days = done.map((t) => t.days).filter((d) => typeof d === 'number');
+        return {
+          month,
+          tasks: ts.length,
+          creatives: ts.reduce((s, t) => s + total(t), 0),
+          main: ts.reduce((s, t) => s + (t.main || 0), 0),
+          resized: ts.reduce((s, t) => s + (t.resized || 0), 0),
+          copies: ts.reduce((s, t) => s + copiesOf(t), 0),
+          completed: done.length,
+          open: ts.length - done.length,
+          avg_days: days.length ? Math.round((days.reduce((a, b) => a + b, 0) / days.length) * 10) / 10 : null,
+          brands: new Set(ts.map((t) => (t.brand || '').trim().toLowerCase()).filter(Boolean)).size,
+        };
+      });
+    },
+  });
+
+  dash.calc('by_designer', {
+    inputs: ['tasks'],
+    title: 'Output per designer',
+    description: 'Per designer and month (plus All): tasks, done, open and creatives. Main designs split evenly between a task\'s designers; resizes go to its Resized By names when given , else split evenly too.',
+    fn: (tasks) => {
+      // Who did the resizes on tasks the sheet has no Resized By for, as the team confirmed.
+      const RESIZED_BY = [];
+      const split = (s) => (s || '').split(/\s*(?:\/|,|&|\+|\band\b)\s*/i).map((x) => x.trim()).filter(Boolean);
+      const out = new Map();
+      const isDone = (t) => /complet|deliver/i.test(t.status || '') || !!t.completed;
+      const copiesOf = (t) => t.copies ?? ((t.creative_copy || 0) + (t.meta_copy || 0) + (t.pmax_copy || 0));
+      for (const t of tasks) {
+        let names = split(t.designer);
+        if (!names.length) names = ['Unassigned'];
+        const fixed = RESIZED_BY.find((o) => o.row === t.row && o.brands.includes((t.brand || '').trim().toLowerCase()));
+        const resizers = split(t.resized_by).length ? split(t.resized_by) : fixed ? fixed.names : names;
+        const month = /^\d{4}-\d{2}-\d{2}$/.test(t.received || '') ? t.received.slice(0, 7) : null;
+        const main = t.main || 0, resized = t.resized || 0;
+        const other = Math.max(0, (t.total ?? main + resized) - main - resized);
+        const people = [...new Map([...names, ...resizers].map((n) => [n.toLowerCase(), n])).values()];
+        const has = (list, n) => list.some((x) => x.toLowerCase() === n.toLowerCase());
+        for (const m of month ? ['All', month] : ['All']) {
+          for (const name of people) {
+            const key = m + '|' + name.toLowerCase();
+            let r = out.get(key);
+            if (!r) out.set(key, (r = { key, month: m, designer: name, tasks: 0, completed: 0, open: 0, main: 0, resized: 0, creatives: 0 }));
+            r.tasks += 1;
+            if (isDone(t)) r.completed += 1; else r.open += 1;
+            const mShare = has(names, name) ? main / names.length : 0;
+            const rShare = has(resizers, name) ? resized / resizers.length : 0;
+            const oShare = has(names, name) ? other / names.length : 0;
+            r.main += mShare;
+            r.resized += rShare;
+            r.creatives += mShare + rShare + oShare;
+          }
+        }
+      }
+      const r2 = (n) => Math.round(n * 100) / 100;
+      return [...out.values()].map((r) => ({ ...r, main: r2(r.main), resized: r2(r.resized), creatives: r2(r.creatives) }));
+    },
+  });
+
+  dash.calc('by_copywriter', {
+    inputs: ['tasks'],
+    title: 'Output per copywriter',
+    description: 'Per copywriter and month (plus All): tasks with copies, done, open, and creative, Meta and Pmax copies (copies = their sum). Shared tasks are split evenly.',
+    fn: (tasks) => {
+      const DEFAULT_WRITER = 'Writer A';
+      // Demonstration attribution rules.
+      const REASSIGN = {};
+      const out = new Map();
+      const isDone = (t) => /complet|deliver/i.test(t.status || '') || !!t.completed;
+      const copiesOf = (t) => t.copies ?? ((t.creative_copy || 0) + (t.meta_copy || 0) + (t.pmax_copy || 0));
+      for (const t of tasks) {
+        if (!(copiesOf(t) > 0) && !t.copywriter) continue;
+        let names = (t.copywriter || '').split(/\s*(?:\/|,|&|\+|\band\b)\s*/i).map((s) => s.trim()).filter(Boolean);
+        names = [...new Map(names.map((n) => REASSIGN[n.toLowerCase()] || n).map((n) => [n.toLowerCase(), n])).values()];
+        if (!names.length) names = [DEFAULT_WRITER];
+        const share = 1 / names.length;
+        const month = /^\d{4}-\d{2}-\d{2}$/.test(t.received || '') ? t.received.slice(0, 7) : null;
+        for (const m of month ? ['All', month] : ['All']) {
+          for (const name of names) {
+            const key = m + '|' + name.toLowerCase();
+            let r = out.get(key);
+            if (!r) out.set(key, (r = { key, month: m, copywriter: name, tasks: 0, completed: 0, open: 0, creative_copy: 0, meta_copy: 0, pmax_copy: 0, copies: 0 }));
+            r.tasks += 1;
+            if (isDone(t)) r.completed += 1; else r.open += 1;
+            r.creative_copy += (t.creative_copy || 0) * share;
+            r.meta_copy += (t.meta_copy || 0) * share;
+            r.pmax_copy += (t.pmax_copy || 0) * share;
+            r.copies += copiesOf(t) * share;
+          }
+        }
+      }
+      const r2 = (n) => Math.round(n * 100) / 100;
+      return [...out.values()].map((r) => ({ ...r, creative_copy: r2(r.creative_copy), meta_copy: r2(r.meta_copy), pmax_copy: r2(r.pmax_copy), copies: r2(r.copies) }));
+    },
+  });
+
+  dash.calc('by_brand', {
+    inputs: ['tasks'],
+    title: 'Workload per brand',
+    description: 'Per brand and month (plus All): tasks, open tasks, main banners, resizes, creatives requested and copies written.',
+    fn: (tasks) => {
+      const out = new Map();
+      const isDone = (t) => /complet|deliver/i.test(t.status || '') || !!t.completed;
+      const copiesOf = (t) => t.copies ?? ((t.creative_copy || 0) + (t.meta_copy || 0) + (t.pmax_copy || 0));
+      for (const t of tasks) {
+        const brand = (t.brand || '').trim() || 'No brand';
+        const month = /^\d{4}-\d{2}-\d{2}$/.test(t.received || '') ? t.received.slice(0, 7) : null;
+        const total = t.total ?? ((t.main || 0) + (t.resized || 0));
+        for (const m of month ? ['All', month] : ['All']) {
+          const key = m + '|' + brand.toLowerCase();
+          let r = out.get(key);
+          if (!r) out.set(key, (r = { key, month: m, brand, tasks: 0, open: 0, main: 0, resized: 0, creatives: 0, copies: 0 }));
+          r.tasks += 1;
+          if (!isDone(t)) r.open += 1;
+          r.main += t.main || 0;
+          r.resized += t.resized || 0;
+          r.creatives += total;
+          r.copies += copiesOf(t);
+        }
+      }
+      return [...out.values()];
+    },
+  });
+
+  dash.calc('weekly', {
+    inputs: ['tasks'],
+    title: 'Creatives per week',
+    description: 'Creatives received (by date received) and completed (by date completed) in each Monday-start week.',
+    fn: (tasks) => {
+      const weekOf = (d) => {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(d || '')) return null;
+        const t = new Date(d + 'T00:00:00Z');
+        t.setUTCDate(t.getUTCDate() - ((t.getUTCDay() + 6) % 7));
+        return t.toISOString().slice(0, 10);
+      };
+      const out = new Map();
+      const row = (w) => out.get(w) || out.set(w, { week: w, received: 0, completed: 0 }).get(w);
+      for (const t of tasks) {
+        const total = t.total ?? ((t.main || 0) + (t.resized || 0));
+        const wr = weekOf(t.received);
+        if (wr) row(wr).received += total;
+        const wc = weekOf(t.completed);
+        if (wc) row(wc).completed += total;
+      }
+      const weeks = [...out.keys()].sort();
+      if (weeks.length) {
+        for (let d = new Date(weeks[0] + 'T00:00:00Z'); d.toISOString().slice(0, 10) < weeks[weeks.length - 1]; d.setUTCDate(d.getUTCDate() + 7)) {
+          row(d.toISOString().slice(0, 10));
+        }
+      }
+      return [...out.values()].sort((a, b) => a.week.localeCompare(b.week));
+    },
+  });
+
+  /* ---------- Shared helpers ---------- */
+  const fmtN = d3.format(',.1~f');
+  const fmtDay = (d) => (/^\d{4}-\d{2}-\d{2}$/.test(d || '') ? d3.utcFormat('%-d %b %Y')(new Date(d + 'T00:00:00Z')) : d || '');
+  const monthLabel = (m) => (m === 'All' ? 'All time' : d3.utcFormat('%B %Y')(new Date(m + '-01T00:00:00Z')));
+  const curMonth = () => dash.params().month || 'All';
+  const where = (k, v) => k + '=' + encodeURIComponent(v);
+  const colors = () => ({ main: dash.colors[0], resized: dash.colors[1], done: dash.colors[2], copy: dash.colors[3], meta: dash.colors[4], pmax: dash.colors[5] });
+
+  document.querySelectorAll('.ct-sw-main').forEach((s) => { s.style.background = colors().main; });
+  document.querySelectorAll('.ct-sw-resized').forEach((s) => { s.style.background = colors().resized; });
+  document.querySelectorAll('.ct-sw-done').forEach((s) => { s.style.background = colors().done; });
+  document.querySelectorAll('.ct-sw-copy').forEach((s) => { s.style.background = colors().copy; });
+  document.querySelectorAll('.ct-sw-meta').forEach((s) => { s.style.background = colors().meta; });
+  document.querySelectorAll('.ct-sw-pmax').forEach((s) => { s.style.background = colors().pmax; });
+
+  const notReady = (el, ids) => {
+    const st = ids.map((id) => dash.data(id).status);
+    if (st.every((s) => s === 'ok')) { el.classList.remove('dash-skeleton'); return false; }
+    el.replaceChildren();
+    if (st.includes('error')) {
+      el.classList.remove('dash-skeleton');
+      const f = document.createElement('div');
+      f.className = 'ct-failed';
+      f.textContent = 'Failed to load';
+      el.append(f);
+    } else if (!el.matches('tbody')) {
+      el.classList.add('dash-skeleton');
+    }
+    return true;
+  };
+
+  const placeTip = (box, tip, event, head, lines) => {
+    const h = document.createElement('div');
+    h.className = 'ct-tip-head';
+    h.textContent = head;
+    tip.replaceChildren(h, ...lines.map(([name, value, color]) => {
+      const d = document.createElement('div');
+      if (color) { const s = document.createElement('span'); s.className = 'ct-sw'; s.style.background = color; d.append(s); }
+      d.append(document.createTextNode(name));
+      const b = document.createElement('b'); b.textContent = value; d.append(b);
+      return d;
+    }));
+    tip.hidden = false;
+    const r = box.getBoundingClientRect();
+    let x = event.clientX - r.left + 12;
+    if (x + tip.offsetWidth > r.width) x = Math.max(0, event.clientX - r.left - tip.offsetWidth - 12);
+    tip.style.left = x + 'px';
+    tip.style.top = (event.clientY - r.top + 12) + 'px';
+  };
+
+  // Horizontal bars: one row per item, stacked segments, total at the end.
+  const hbars = (el, rows, { name, segs, total, tipHead, tipLines }) => {
+    el.replaceChildren();
+    if (!rows.length) { el.textContent = '—'; return; }
+    const W = Math.max(260, el.clientWidth);
+    const rowH = 22, gap = 12;
+    const svg = d3.select(el).append('svg').attr('width', '100%');
+    const probe = svg.append('text').attr('class', 'ct-lbl');
+    const measure = (s) => { probe.text(s); return probe.node().getComputedTextLength(); };
+    const maxLeft = W * 0.38;
+    const labels = rows.map((r) => {
+      let s = name(r);
+      while (s.length > 4 && measure(s) > maxLeft) s = s.slice(0, -2) + '…';
+      return s;
+    });
+    const left = Math.min(maxLeft, d3.max(labels, measure)) + 10;
+    const right = d3.max(rows, (r) => measure(fmtN(total(r)))) + 10;
+    probe.remove();
+    const H = rows.length * (rowH + gap) - gap + 2;
+    svg.attr('viewBox', `0 0 ${W} ${H}`).attr('height', H);
+    const x = d3.scaleLinear([0, d3.max(rows, total) || 1], [left, W - right]);
+    const tip = document.createElement('div');
+    tip.className = 'ct-tip';
+    tip.hidden = true;
+    el.append(tip);
+    rows.forEach((r, i) => {
+      const y = i * (rowH + gap);
+      const g = svg.append('g').attr('transform', `translate(0,${y})`);
+      g.append('text').attr('class', 'ct-lbl').attr('x', left - 10).attr('y', rowH / 2).attr('dy', '0.35em').attr('text-anchor', 'end').text(labels[i]);
+      let x0 = 0;
+      segs.forEach((s) => {
+        const v = s.value(r) || 0;
+        if (v > 0) g.append('rect').attr('x', x(x0)).attr('y', 0).attr('width', Math.max(1, x(x0 + v) - x(x0))).attr('height', rowH).attr('rx', 3).style('fill', s.color);
+        x0 += v;
+      });
+      g.append('text').attr('class', 'ct-end').attr('x', x(total(r)) + 6).attr('y', rowH / 2).attr('dy', '0.35em').text(fmtN(total(r)));
+      g.append('rect').attr('x', 0).attr('y', -gap / 2).attr('width', W).attr('height', rowH + gap).style('fill', 'transparent')
+        .on('pointermove', (event) => placeTip(el, tip, event, tipHead(r), tipLines(r)))
+        .on('pointerleave', () => { tip.hidden = true; });
+    });
+  };
+
+  /* ---------- Header ---------- */
+  dash.draw('month', (sel) => {
+    const k = dash.data('kpis');
+    const months = k.status === 'ok' ? k.data.map((r) => r.month).filter((m) => m !== 'All').sort().reverse() : [];
+    sel.replaceChildren(new Option('All time', 'All'), ...months.map((m) => new Option(monthLabel(m), m)));
+    sel.value = months.includes(curMonth()) ? curMonth() : 'All';
+    sel.onchange = () => dash.setParams({ month: sel.value });
+  });
+
+  dash.draw('period', (el) => {
+    el.textContent = curMonth() === 'All' ? 'so far' : 'in ' + monthLabel(curMonth());
+  });
+
+  const topDesigner = (field) => {
+    const d = dash.data('by_designer');
+    if (d.status !== 'ok') return null;
+    return d.data.filter((r) => r.month === curMonth() && r.designer !== 'Unassigned' && r[field] > 0).sort((a, b) => b[field] - a[field])[0] || null;
+  };
+  [['', 'main'], ['-resized', 'resized']].forEach(([suffix, field]) => {
+    dash.draw('topname' + suffix, (el) => {
+      const t = topDesigner(field);
+      el.textContent = t ? t.designer : '—';
+      if (t) el.dataset.where = where('key', t.key); else delete el.dataset.where;
+    });
+    dash.draw('topval' + suffix, (el) => {
+      const t = topDesigner(field);
+      el.textContent = t ? fmtN(t[field]) : '—';
+      if (t) el.dataset.where = where('key', t.key); else delete el.dataset.where;
+    });
+  });
+
+  /* ---------- Headline figures ---------- */
+  dash.draw('kpi', (el) => {
+    if (notReady(el, ['kpis'])) { if (!el.firstChild) el.textContent = '—'; return; }
+    const row = dash.data('kpis').data.find((r) => r.month === curMonth());
+    el.dataset.where = where('month', curMonth());
+    const v = row ? row[el.dataset.field] : null;
+    el.textContent = v == null ? '—' : fmtN(v);
+  });
+
+  /* ---------- Designers ---------- */
+  const designerRows = (field = 'main') => dash.data('by_designer').data.filter((r) => r.month === curMonth()).sort((a, b) => b[field] - a[field] || b.resized - a.resized);
+
+  [['designers-main', 'main', 'Main banners'], ['designers-resized', 'resized', 'Resizes']].forEach(([draw, field, label]) => {
+    dash.draw(draw, (el) => {
+      if (notReady(el, ['by_designer'])) return;
+      const color = colors()[field];
+      hbars(el, designerRows(field), {
+        name: (r) => r.designer,
+        total: (r) => r[field],
+        segs: [{ value: (r) => r[field], color }],
+        tipHead: (r) => r.designer + ' · ' + monthLabel(r.month),
+        tipLines: (r) => [[label, fmtN(r[field]), color], ['Tasks', fmtN(r.tasks)], ['Done / open', r.completed + ' / ' + r.open]],
+      });
+    });
+  });
+
+  dash.draw('designerrows', (tb) => {
+    if (notReady(tb, ['by_designer'])) return;
+    tb.replaceChildren(...designerRows().map((r) => {
+      const tr = document.createElement('tr');
+      tr.dataset.key = r.key;
+      [[r.designer, ''], [fmtN(r.tasks), 'num'], [fmtN(r.completed), 'num'], [fmtN(r.open), 'num'], [fmtN(r.main), 'num'], [fmtN(r.resized), 'num']].forEach(([v, cls]) => {
+        const td = document.createElement('td'); td.textContent = v; if (cls) td.className = cls; tr.append(td);
+      });
+      return tr;
+    }));
+  });
+
+  /* ---------- Brands ---------- */
+  dash.draw('brands', (el) => {
+    if (notReady(el, ['by_brand'])) return;
+    const c = colors();
+    const rows = dash.data('by_brand').data.filter((r) => r.month === curMonth()).sort((a, b) => b.creatives - a.creatives);
+    hbars(el, rows, {
+      name: (r) => r.brand,
+      total: (r) => r.creatives,
+      segs: [{ value: (r) => r.main, color: c.main }, { value: (r) => r.resized, color: c.resized }],
+      tipHead: (r) => r.brand + ' · ' + monthLabel(r.month),
+      tipLines: (r) => [['Main banners', fmtN(r.main), c.main], ['Resizes', fmtN(r.resized), c.resized], ['Tasks', fmtN(r.tasks)], ['Still open', fmtN(r.open)]],
+    });
+  });
+
+  /* ---------- Copywriters ---------- */
+  const copywriterRows = () => dash.data('by_copywriter').data.filter((r) => r.month === curMonth()).sort((a, b) => b.copies - a.copies);
+
+  dash.draw('copywriters', (el) => {
+    if (notReady(el, ['by_copywriter'])) return;
+    const c = colors();
+    hbars(el, copywriterRows(), {
+      name: (r) => r.copywriter,
+      total: (r) => r.copies,
+      segs: [{ value: (r) => r.creative_copy, color: c.copy }, { value: (r) => r.meta_copy, color: c.meta }, { value: (r) => r.pmax_copy, color: c.pmax }],
+      tipHead: (r) => r.copywriter + ' · ' + monthLabel(r.month),
+      tipLines: (r) => [['Creative copy', fmtN(r.creative_copy), c.copy], ['Meta copy', fmtN(r.meta_copy), c.meta], ['Pmax copy', fmtN(r.pmax_copy), c.pmax], ['Tasks', fmtN(r.tasks)], ['Done / open', r.completed + ' / ' + r.open]],
+    });
+  });
+
+  dash.draw('copywriterrows', (tb) => {
+    if (notReady(tb, ['by_copywriter'])) return;
+    tb.replaceChildren(...copywriterRows().map((r) => {
+      const tr = document.createElement('tr');
+      tr.dataset.key = r.key;
+      [[r.copywriter, ''], [fmtN(r.tasks), 'num'], [fmtN(r.completed), 'num'], [fmtN(r.open), 'num'], [fmtN(r.creative_copy), 'num'], [fmtN(r.meta_copy), 'num'], [fmtN(r.pmax_copy), 'num'], [fmtN(r.copies), 'num']].forEach(([v, cls]) => {
+        const td = document.createElement('td'); td.textContent = v; if (cls) td.className = cls; tr.append(td);
+      });
+      return tr;
+    }));
+  });
+
+  /* ---------- Copy by brand ---------- */
+  dash.draw('copies', (el) => {
+    if (notReady(el, ['by_brand'])) return;
+    const c = colors();
+    const rows = dash.data('by_brand').data.filter((r) => r.month === curMonth() && r.copies > 0).sort((a, b) => b.copies - a.copies);
+    hbars(el, rows, {
+      name: (r) => r.brand,
+      total: (r) => r.copies,
+      segs: [{ value: (r) => r.copies, color: c.copy }],
+      tipHead: (r) => r.brand + ' · ' + monthLabel(r.month),
+      tipLines: (r) => [['Copies', fmtN(r.copies), c.copy], ['Tasks', fmtN(r.tasks)]],
+    });
+  });
+
+  /* ---------- Weekly flow ---------- */
+  dash.draw('weekly', (el) => {
+    if (notReady(el, ['weekly'])) return;
+    el.replaceChildren();
+    const rows = dash.data('weekly').data;
+    if (!rows.length) { el.textContent = '—'; return; }
+    const c = colors();
+    const W = Math.max(260, el.clientWidth), H = 220;
+    const svg = d3.select(el).append('svg').attr('width', '100%').attr('viewBox', `0 0 ${W} ${H}`).attr('height', H);
+    const ymax = d3.max(rows, (r) => Math.max(r.received, r.completed)) || 1;
+    const y = d3.scaleLinear([0, ymax], [H - 24, 8]).nice(4);
+    const probe = svg.append('text');
+    const left = d3.max(y.ticks(4), (t) => { probe.text(fmtN(t)); return probe.node().getComputedTextLength(); }) + 10;
+    probe.text('Sep 28'); const tickW = probe.node().getComputedTextLength() + 12;
+    probe.remove();
+    const x0 = d3.scaleBand(rows.map((r) => r.week), [left, W - 4]).paddingInner(0.25).paddingOuter(0.1);
+    const x1 = d3.scaleBand(['received', 'completed'], [0, x0.bandwidth()]).padding(0.08);
+    y.ticks(4).forEach((t) => {
+      svg.append('line').attr('class', t === 0 ? 'ct-axis-line' : 'ct-grid-line').attr('x1', left).attr('x2', W - 4).attr('y1', y(t)).attr('y2', y(t));
+      svg.append('text').attr('x', left - 8).attr('y', y(t)).attr('dy', '0.35em').attr('text-anchor', 'end').text(fmtN(t));
+    });
+    const every = Math.max(1, Math.ceil(tickW / x0.step()));
+    const tip = document.createElement('div');
+    tip.className = 'ct-tip';
+    tip.hidden = true;
+    el.append(tip);
+    const label = (w) => d3.utcFormat('%b %-d')(new Date(w + 'T00:00:00Z'));
+    rows.forEach((r, i) => {
+      const g = svg.append('g').attr('transform', `translate(${x0(r.week)},0)`);
+      const bw = Math.min(32, x1.bandwidth());
+      [['received', c.main], ['completed', c.done]].forEach(([k, col]) => {
+        const v = r[k];
+        if (v > 0) g.append('rect').attr('x', x1(k) + (x1.bandwidth() - bw) / 2).attr('width', bw).attr('y', y(v)).attr('height', y(0) - y(v)).attr('rx', 3).style('fill', col);
+      });
+      if (i % every === 0) g.append('text').attr('x', x0.bandwidth() / 2).attr('y', H - 6).attr('text-anchor', 'middle').text(label(r.week));
+      g.append('rect').attr('x', -x0.step() * x0.paddingInner() / 2).attr('y', 0).attr('width', x0.step()).attr('height', H).style('fill', 'transparent')
+        .on('pointermove', (event) => placeTip(el, tip, event, 'Week of ' + label(r.week), [['Received', fmtN(r.received), c.main], ['Completed', fmtN(r.completed), c.done]]))
+        .on('pointerleave', () => { tip.hidden = true; });
+    });
+  });
+
+  /* ---------- Tables ---------- */
+  const pill = (status) => {
+    const s = document.createElement('span');
+    const v = status || 'Not assigned';
+    s.className = 'ct-pill ' + (/complet|deliver/i.test(v) ? 'is-done' : /not assigned/i.test(v) ? 'is-unassigned' : 'is-progress');
+    s.textContent = v;
+    return s;
+  };
+  const cell = (tr, value, cls) => {
+    const td = document.createElement('td');
+    if (value instanceof Node) td.append(value); else td.textContent = value ?? '';
+    if (cls) td.className = cls;
+    tr.append(td);
+  };
+  const isOpen = (t) => !(/complet|deliver/i.test(t.status || '') || !!t.completed);
+
+  dash.draw('openrows', (tb) => {
+    if (notReady(tb, ['tasks'])) return;
+    const rows = dash.data('tasks').data.filter(isOpen).sort((a, b) => (a.received || '9').localeCompare(b.received || '9'));
+    tb.replaceChildren(...rows.map((t) => {
+      const tr = document.createElement('tr');
+      cell(tr, t.row, 'num');
+      cell(tr, fmtDay(t.received), 'ct-nowrap');
+      cell(tr, t.brand);
+      cell(tr, t.task, 'ct-task');
+      cell(tr, t.designer);
+      cell(tr, t.copywriter);
+      cell(tr, t.total == null ? '' : fmtN(t.total), 'num');
+      cell(tr, pill(t.status));
+      return tr;
+    }));
+  });
+
+  let sortKey = 'received', sortDir = -1;
+  const search = document.querySelectorAll('#ct-search');
+  search.forEach((s) => s.addEventListener('input', () => dash.draw('taskrows')));
+  const showSort = () => {
+    document.querySelectorAll('.ct-sort').forEach((b) => {
+      const th = b.closest('th');
+      if (th) th.setAttribute('aria-sort', b.dataset.key === sortKey ? (sortDir > 0 ? 'ascending' : 'descending') : 'none');
+    });
+  };
+  document.querySelectorAll('.ct-sort').forEach((b) => b.addEventListener('click', () => {
+    if (sortKey === b.dataset.key) sortDir = -sortDir; else { sortKey = b.dataset.key; sortDir = ['brand', 'task', 'designer', 'copywriter', 'status'].includes(sortKey) ? 1 : -1; }
+    showSort();
+    dash.draw('taskrows');
+  }));
+  showSort();
+
+  dash.draw('taskrows', (tb) => {
+    if (notReady(tb, ['tasks'])) return;
+    const m = curMonth();
+    const q = [...search].map((s) => s.value.trim().toLowerCase()).find(Boolean) || '';
+    const rows = dash.data('tasks').data
+      .filter((t) => m === 'All' || (t.received || '').startsWith(m))
+      .filter((t) => !q || [t.brand, t.task, t.designer, t.copywriter, t.status, t.notes].some((v) => (v || '').toLowerCase().includes(q)))
+      .sort((a, b) => {
+        const va = a[sortKey], vb = b[sortKey];
+        if (va == null && vb == null) return 0;
+        if (va == null) return 1;
+        if (vb == null) return -1;
+        return (typeof va === 'number' ? va - vb : String(va).localeCompare(String(vb))) * sortDir;
+      });
+    tb.replaceChildren(...rows.map((t) => {
+      const tr = document.createElement('tr');
+      cell(tr, t.row, 'num');
+      cell(tr, fmtDay(t.received), 'ct-nowrap');
+      cell(tr, t.brand);
+      cell(tr, t.task, 'ct-task');
+      cell(tr, t.designer);
+      cell(tr, t.copywriter);
+      cell(tr, t.creative_copy == null ? '' : fmtN(t.creative_copy), 'num');
+      cell(tr, t.meta_copy == null ? '' : fmtN(t.meta_copy), 'num');
+      cell(tr, t.pmax_copy == null ? '' : fmtN(t.pmax_copy), 'num');
+      cell(tr, t.main == null ? '' : fmtN(t.main), 'num');
+      cell(tr, t.resized == null ? '' : fmtN(t.resized), 'num');
+      cell(tr, t.total == null ? '' : fmtN(t.total), 'num');
+      cell(tr, pill(t.status));
+      cell(tr, fmtDay(t.completed), 'ct-nowrap');
+      cell(tr, t.days == null ? '' : fmtN(t.days), 'num');
+      return tr;
+    }));
+  });
+</script>
+
+</div>
+<script>dash.__runAll();</script>
+</body>
+</html>

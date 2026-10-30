@@ -1,0 +1,2238 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Creative Resizer</title>
+<style>
+  /* Layout: one working column — source + settings on top, network sections of size cards below, export bar pinned to the bottom. */
+  :root {
+    --surface: #f6f5f2; --surface-raised: #ffffff; --line: #dcd8d0; --ink: #1c1b19; --ink-muted: #5f5b54;
+    --accent: #c2410c; --on-accent: #ffffff; --ok: #1f6f3a; --warn: #8a4b00; --stage: #e9e6e0;
+    --font-sans: "Space Grotesk", system-ui, sans-serif; --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+    --space-1: 4px; --space-2: 8px; --space-3: 16px; --space-4: 24px;
+    --radius-sm: 4px; --radius-md: 8px; --radius-lg: 14px;
+  }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+    --surface: #161513; --surface-raised: #201f1c; --line: #36332e; --ink: #f1eee8; --ink-muted: #a9a399;
+    --accent: #ff7a4d; --on-accent: #1c1b19; --ok: #6cc27a; --warn: #f0a640; --stage: #0e0d0c; color-scheme: dark; } }
+  :root[data-theme="dark"] {
+    --surface: #161513; --surface-raised: #201f1c; --line: #36332e; --ink: #f1eee8; --ink-muted: #a9a399;
+    --accent: #ff7a4d; --on-accent: #1c1b19; --ok: #6cc27a; --warn: #f0a640; --stage: #0e0d0c; color-scheme: dark; }
+  .apphead { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); align-items: baseline; justify-content: space-between; padding-block: var(--space-2) 0; }
+  .apphead h1 { margin: 0; font: 600 28px/32px var(--font-sans); letter-spacing: -.01em; text-wrap: balance; }
+  .apphead p { margin: 0; max-width: 62ch; color: var(--ink-muted); font-size: 13px; line-height: 18px; }
+  .apphead a { color: var(--ink); text-underline-offset: 3px; }
+  .rz .bar { bottom: env(safe-area-inset-bottom, 0px); }
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  :root { color-scheme: light dark; }
+  [hidden] { display: none !important; }
+  body { margin: 0; background: var(--surface); color: var(--ink); font: 400 14px/20px var(--font-sans, system-ui, sans-serif); }
+  .rz { padding: var(--space-3); display: grid; gap: var(--space-4); max-width: 1320px; margin: 0 auto; box-sizing: border-box; }
+  .rz * { box-sizing: border-box; }
+  .mono { font: 500 12px/16px var(--font-mono, ui-monospace, monospace); }
+  .muted { color: var(--ink-muted); }
+  h2 { font: 600 20px/26px var(--font-sans, system-ui); margin: 0; }
+  label.f { display: grid; gap: var(--space-1); font: 500 12px/16px var(--font-sans, system-ui); color: var(--ink-muted); }
+  input, select, button { font: inherit; color: var(--ink); }
+  select, input[type=text], input[type=number] { background: var(--surface-raised); border: 1px solid var(--ink-muted); border-radius: var(--radius-sm); padding: 6px 8px; min-height: 34px; }
+  input[type=range] { accent-color: var(--accent); }
+  button { background: var(--surface-raised); border: 1px solid var(--ink-muted); border-radius: var(--radius-md); padding: 6px 12px; min-height: 34px; cursor: pointer; }
+  button:hover { border-color: var(--ink); }
+  button.primary, button[aria-pressed=true] { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+  button.primary { font-weight: 600; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .panel { background: var(--surface-raised); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: var(--space-3); }
+  .top { display: grid; grid-template-columns: minmax(0, 480px) minmax(0, 1fr); gap: var(--space-4); align-items: start; }
+  @media (max-width: 860px) { .top { grid-template-columns: 1fr; } }
+  .modes { display: flex; flex-wrap: wrap; gap: var(--space-1); margin-bottom: var(--space-2); }
+  .drops { display: grid; gap: var(--space-2); grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+  .drop { border: 2px dashed var(--ink-muted); border-radius: var(--radius-lg); min-height: 150px; display: grid; place-items: center; text-align: center; padding: var(--space-3); cursor: pointer; background: var(--stage); }
+  .drop.done { border-style: solid; border-color: var(--ok); }
+  .drop.over, .srcwrap.over { outline: 2px dashed var(--accent); outline-offset: 4px; }
+  .srcwrap { display: grid; gap: var(--space-2); margin-top: var(--space-2); }
+  .tools { display: flex; flex-wrap: wrap; gap: var(--space-1); }
+  .tools button { min-height: 30px; padding: 4px 10px; font-size: 13px; }
+  .srcstage { background: var(--stage); border-radius: var(--radius-md); padding: var(--space-2); display: grid; place-items: center; }
+  .srcstage canvas { max-width: 100%; display: block; cursor: crosshair; touch-action: none; }
+  .parts { display: grid; gap: var(--space-1); }
+  .part { display: grid; grid-template-columns: 1fr auto; gap: var(--space-1) var(--space-2); align-items: center; border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 6px 6px 6px 8px; }
+  .part .ctl { display: flex; flex-wrap: wrap; gap: var(--space-1); align-items: center; }
+  .part select, .part button { min-height: 28px; padding: 2px 6px; font-size: 12px; }
+  .part input[type=range] { width: 90px; }
+  .row { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: end; }
+  .controls { display: grid; gap: var(--space-3); }
+  .chip { display: inline-flex; align-items: center; gap: var(--space-1); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: var(--space-4); }
+  .card { background: var(--surface-raised); border: 1px solid var(--line); border-radius: var(--radius-md); padding: var(--space-2); display: grid; gap: var(--space-2); align-content: start; }
+  .card.off { opacity: .55; }
+  .card header { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-2); }
+  .card header b { font: 500 12px/16px var(--font-sans, system-ui); }
+  .stage { background: repeating-linear-gradient(45deg, var(--stage) 0 7px, var(--line) 7px 8px); border-radius: var(--radius-sm); height: 240px; display: grid; place-items: center; overflow: hidden; }
+  .stage canvas { display: block; cursor: grab; touch-action: pan-y pinch-zoom; }
+  .stage canvas:focus { touch-action: none; outline: 2px solid var(--accent); outline-offset: 2px; }
+  .stage canvas { box-shadow: 0 0 0 1px var(--ink-muted), 0 2px 8px rgb(0 0 0 / .18); }
+  .stage canvas:active { cursor: grabbing; }
+  .chips { display: flex; flex-wrap: wrap; gap: var(--space-1); }
+  .chips button { min-height: 24px; padding: 1px 8px; font-size: 11px; border-radius: var(--radius-sm); }
+  .chips button[aria-pressed=false] { text-decoration: line-through; color: var(--ink-muted); background: var(--surface-raised); border-color: var(--ink-muted); }
+  .badges { display: flex; flex-wrap: wrap; gap: var(--space-1); min-height: 20px; }
+  .b { font: 500 11px/16px var(--font-mono, ui-monospace); padding: 2px 6px; border-radius: var(--radius-sm); border: 1px solid currentColor; background: none; }
+  .b.ok { color: var(--ok); } .b.warn { color: var(--warn); } .b.info { color: var(--ink-muted); }
+  .cardctl { display: grid; grid-template-columns: auto 1fr auto; gap: var(--space-2); align-items: center; }
+  .cardctl input[type=range] { width: 100%; }
+  .cardbtns { display: flex; gap: var(--space-1); flex-wrap: wrap; align-items: center; }
+  .cardbtns button, .cardbtns select { min-height: 30px; padding: 4px 8px; font-size: 12px; }
+  .bar { position: sticky; bottom: 0; z-index: 2; display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: end; justify-content: space-between; }
+  .sum { font: 500 16px/20px var(--font-mono, ui-monospace); }
+  dialog { background: var(--surface-raised); color: var(--ink); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: var(--space-3); width: min(420px, calc(100vw - 32px)); }
+  dialog::backdrop { background: rgb(0 0 0 / .4); }
+  dialog form { display: grid; gap: var(--space-3); }
+  .hint { font-size: 12px; line-height: 16px; color: var(--ink-muted); margin: 0; }
+  ol.hint { padding-left: 18px; display: grid; gap: 2px; }
+  .empty { color: var(--ink-muted); text-align: center; padding: var(--space-4); }
+  .modes button { display: grid; text-align: left; gap: 0; padding: 6px 12px; }
+  .modes button span { font-size: 11px; line-height: 14px; opacity: .85; }
+  .steps { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
+  .step { border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface-raised); padding: var(--space-3); display: grid; gap: var(--space-2); }
+  .step .sh { display: flex; align-items: center; gap: var(--space-2); }
+  .step .num { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; flex: none; font: 600 12px/1 var(--font-mono, ui-monospace); background: var(--ink); color: var(--surface-raised); }
+  .step .sh b { font: 600 15px/20px var(--font-sans, system-ui); flex: 1; min-width: 0; }
+  .step .st { font: 500 11px/16px var(--font-mono, ui-monospace); padding: 2px 8px; border-radius: 999px; border: 1px solid currentColor; color: var(--ink-muted); white-space: nowrap; }
+  .step .st.ok { color: var(--ok); } .step .st.warn { color: var(--warn); }
+  .step.locked { opacity: .55; } .step.locked .body { display: none; }
+  .step .body { display: grid; gap: var(--space-2); min-width: 0; }
+  .thumb { width: 44px; height: 44px; border-radius: var(--radius-sm); flex: none; background: repeating-conic-gradient(var(--line) 0 25%, var(--surface-raised) 0 50%) 0 0 / 10px 10px; box-shadow: 0 0 0 1px var(--line); }
+  .piece { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--space-2); align-items: center; border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 6px; }
+  .piece .nm { font: 500 12px/16px var(--font-mono, ui-monospace); overflow-wrap: anywhere; }
+  .piece .q { display: flex; flex-wrap: wrap; gap: var(--space-1); align-items: center; }
+  .piece select, .piece button { min-height: 28px; padding: 2px 6px; font-size: 12px; }
+  .guess { font-size: 11px; color: var(--ink-muted); }
+  .drawhint { font-weight: 600; color: var(--accent); }
+</style>
+
+<div class="rz" id="app">
+  <header class="apphead">
+    <div style="display:grid;gap:4px;min-width:0">
+      <h1>Creative Resizer</h1>
+      <p>One creative in, every ad size out: Meta, Google PMax, Demand Gen and AdRoll, inside each size's safe zone and under each network's file limit. Images are processed in your browser and never uploaded.</p>
+    </div>
+    <p></p>
+  </header>
+  <div class="top">
+    <div>
+      <p class="hint" style="margin-bottom:var(--space-1)"><b>What do you have?</b></p>
+      <div class="modes" role="tablist" aria-label="What you have">
+        <button type="button" data-mode="layers"><b>Layers</b><span>I have the separate pieces</span></button>
+        <button type="button" data-mode="flatclean"><b>Flat + clean photo</b><span>The final + the photo without text</span></button>
+        <button type="button" data-mode="flat"><b>Flat only</b><span>I only have the final image</span></button>
+      </div>
+      <ol class="steps">
+        <li class="step" id="st1"><div class="sh"><span class="num">1</span><b>Upload your design</b><span class="st" id="st1s">To do</span></div>
+          <div class="body"><p class="hint" id="modeHint"></p><div class="drops" id="drops"></div></div></li>
+        <li class="step locked" id="st2"><div class="sh"><span class="num">2</span><b id="st2t">Check each piece</b><span class="st" id="st2s"></span></div>
+          <div class="body"><p class="hint" id="st2h"></p><div class="parts" id="layerList" hidden></div><div id="st2slot"></div></div></li>
+        <li class="step locked" id="st3"><div class="sh"><span class="num">3</span><b>Mark what must stay in view</b><span class="st" id="st3s">Optional</span></div>
+          <div class="body">
+            <p class="hint">Draw a box around what must never be cut off, like people's faces or the product. When a size has to crop the photo, it keeps this part in view. Skip this and the tool keeps the centre of the photo.</p>
+            <div class="row" style="align-items:center"><button type="button" id="drawKeep">Draw box</button><button type="button" id="skipKeep">Skip</button><span class="hint" id="st3h"></span></div>
+            <div id="st3slot"></div>
+          </div></li>
+        <li class="step locked" id="st4"><div class="sh"><span class="num">4</span><b>Review sizes and download</b><span class="st" id="st4s"></span></div>
+          <div class="body"><p class="hint">Every size is ready below, one section per network. Fix any card with an orange warning, then press <b>Download ZIP</b> at the bottom.</p>
+            <div class="row"><button type="button" id="goSizes">Go to the sizes ↓</button></div></div></li>
+      </ol>
+      <div class="srcwrap" id="srcWrap" hidden>
+        <div class="tools" id="tools" role="toolbar" aria-label="Tag tool"></div>
+        <div class="srcstage"><canvas id="src" aria-label="Source creative. Drag a box around the part chosen in the toolbar."></canvas></div>
+        <div class="row" style="justify-content:space-between;align-items:center">
+          <label class="chip hint"><input type="checkbox" id="showLeft"> Show what's left (background with parts removed)</label>
+          <span class="hint mono" id="srcInfo"></span>
+        </div>
+        <p class="hint" id="marginWarn" hidden style="color:var(--warn);font-weight:500"></p>
+        <p class="hint" id="coverage"></p>
+        <div class="parts" id="parts"></div>
+      </div>
+      <input type="file" id="file" accept="image/png,image/jpeg,image/webp" hidden>
+    </div>
+    <div class="controls panel">
+      <div class="row">
+        <label class="f">Client <select id="client"></select></label>
+        <button type="button" id="newClient">New client</button>
+        <button type="button" id="editClient">Edit</button>
+        <span class="hint" id="storeNote"></span>
+      </div>
+      <div class="row">
+        <label class="f">Creative name <input type="text" id="cname" value="creative" size="16"></label>
+        <label class="f">Meta format <select id="fmt"><option value="jpg">JPG</option><option value="png">PNG</option></select></label>
+      </div>
+      <fieldset class="nets" style="border:1px solid var(--line);border-radius:var(--radius-md);padding:var(--space-2) var(--space-3);margin:0">
+        <legend class="hint" style="padding:0 4px">Networks · file limit per file (KB)</legend>
+        <div class="row" id="nets"></div>
+      </fieldset>
+      <div class="row">
+        <label class="f">Background
+          <select id="bg"><option value="photo">Photo</option><option value="blur">Photo, blurred</option><option value="brand">Brand colour</option></select>
+        </label>
+        <label class="f">Text scrim
+          <select id="scrim"><option value="off">Off</option><option value="auto">Wide and strip sizes</option><option value="gradient">Gradient everywhere</option><option value="band">Solid band</option></select>
+        </label>
+        <label class="f">Darken photo <span class="row" style="align-items:center;gap:6px"><input type="range" id="darken" min="0" max="70" value="0"><span class="mono" id="darkenV">0%</span></span></label>
+        <label class="f">Gradient colour <span class="row" style="align-items:center;gap:6px"><input type="color" id="fadeC" value="#1d4ed8" aria-label="Gradient colour"><button type="button" id="fadeAuto" aria-pressed="true">Black</button></span></label>
+      </div>
+      <fieldset id="partSizes" hidden style="border:1px solid var(--line);border-radius:var(--radius-md);padding:var(--space-2) var(--space-3);margin:0">
+        <legend class="hint" style="padding:0 4px">Part sizes · every size at once</legend>
+        <div class="row" id="partSizeRows" style="align-items:center;gap:var(--space-2) var(--space-4)"></div>
+      </fieldset>
+      <p class="hint"><b>Settings apply to every size.</b> To fine-tune one size, use its card: drag a piece to move it, click a piece to resize it, drag empty space to move the photo, and click a chip to hide a piece in that size.</p>
+    </div>
+  </div>
+
+  <div class="row" style="justify-content:flex-end;margin-bottom:calc(-1 * var(--space-3))">
+    <label class="chip hint"><input type="checkbox" id="safe" checked> Show safe zones (preview only, never exported)</label>
+  </div>
+  <div id="sections" style="scroll-margin-top:16px" style="display:grid;gap:var(--space-4)"><p class="empty">Load a creative to see every size.</p></div>
+
+  <div class="bar panel">
+    <div>
+      <div class="sum" id="sum">—</div>
+      <div class="hint" id="sumNote">Limit applies to every included size.</div>
+    </div>
+    <div class="row">
+      <button type="button" id="resetAll">Reset all sizes</button>
+      <button type="button" id="canva" hidden>Send to Canva</button>
+      <button type="button" class="primary" id="zip">Download ZIP</button>
+    </div>
+  </div>
+  <div class="panel" id="savePanel" hidden style="display:grid;gap:var(--space-2)">
+    <div class="row" style="justify-content:space-between;align-items:flex-start"><b style="min-width:0">Save your files</b><button type="button" id="saveClose">Close</button></div>
+    <div class="hint" style="min-width:0">Downloads aren't available for your Claude account on this page. Right-click the ZIP link and choose <b>Save link as</b>, or right-click each image (long-press on a phone) and choose <b>Save image as</b>. If your browser names it "image", rename it to the name shown.</div>
+    <div id="saveList" style="display:grid;gap:var(--space-2);min-width:0"></div>
+  </div>
+  <div class="panel" id="canvaDone" hidden style="display:grid;gap:var(--space-2)">
+    <div>Saved as batch <b id="canvaId"></b>. To get it in Canva as one design with a page per size, tell Claude:</div>
+    <div class="row"><code id="canvaAsk" style="user-select:all;font-family:var(--font-mono);padding:4px 8px;border:1px solid var(--line);border-radius:var(--radius-sm);overflow-wrap:anywhere;min-width:0"></code><button type="button" id="canvaCopy">Copy</button></div>
+  </div>
+
+  <div id="toast" role="status" aria-live="polite" hidden style="position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom, 0px));z-index:10;max-width:min(520px,calc(100vw - 32px));background:var(--ink);color:var(--surface);padding:10px 14px;border-radius:var(--radius-md);font-size:13px;line-height:18px"></div>
+
+  <dialog id="dlg">
+    <form method="dialog">
+      <h2 id="dlgTitle">New client</h2>
+      <label class="f">Client name <input type="text" id="dName" required maxlength="60"></label>
+      <label class="f">Brand colour <input type="color" id="dColor" value="#c2410c" style="width:64px;height:34px;padding:2px"></label>
+      <fieldset style="border:0;padding:0;margin:0"><legend class="hint">Networks this client runs</legend><div class="row" id="dNets"></div></fieldset>
+      <label class="f">Meta format <select id="dFmt"><option value="jpg">JPG</option><option value="png">PNG</option></select></label>
+      <div class="row" style="justify-content:space-between">
+        <button type="button" id="dDelete">Delete</button>
+        <div class="row"><button value="cancel" formnovalidate>Cancel</button><button class="primary" value="save">Save</button></div>
+      </div>
+    </form>
+  </dialog>
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const slug = (s) => (s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'untitled';
+  const mk = (w, h) => { const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(w)); c.height = Math.max(1, Math.round(h)); return c; };
+  const cssVar = (n, f) => (getComputedStyle(document.body).getPropertyValue(n).trim() || f);
+  let toastT; // in-page message (the viewer blocks alert/confirm)
+  function notify(msg) { const t = $('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => { t.hidden = true; }, 6000); }
+  const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  const ROLES = [['logo', 'Logo'], ['headline', 'Headline'], ['subhead', 'Small text'], ['cta', 'Button (CTA)'], ['badge', 'Badge'], ['product', 'Subject / product (cut-out)'], ['other', 'Decoration']];
+  const NAME = Object.fromEntries(ROLES); NAME.subject = 'Keep in view'; NAME.background = 'Photo (background)';
+  const DECOS = ['other', 'other2', 'other3', 'other4', 'other5', 'other6']; DECOS.slice(1).forEach((k, i) => { NAME[k] = 'Decoration ' + (i + 2); });
+  const DRAW = ['product', 'other', 'other2', 'other3', 'other4', 'other5', 'other6', 'logo', 'headline', 'subhead', 'badge', 'cta']; // back to front
+  const TEXTY = ['headline', 'subhead', 'cta'];
+
+  // ---------- defaults (overridden by tokens.json) ----------
+  // Fallback spec (EMS Ads Specs). tokens.json is the source of truth and replaces this when it loads.
+  const FALLBACK = {
+    adSize: [
+      ['meta-1440x1800', '1440x1800', 'Meta · Vertical feed 4:5'], ['meta-1440x1440', '1440x1440', 'Meta · Feed post 1:1'],
+      ['meta-1440x2560', '1440x2560', 'Meta · Story & Reel 9:16'], ['meta-1200x628', '1200x628', 'Meta · Horizontal 1.91:1. No logo, no CTA.'],
+      ['pmax-1200x628', '1200x628', 'Google PMax · Horizontal 1.91:1'], ['pmax-1200x1200', '1200x1200', 'Google PMax · Square 1:1'],
+      ['pmax-960x1200', '960x1200', 'Google PMax · Vertical 4:5'], ['pmax-logo-1200x1200', '1200x1200', 'Google PMax · Logo square'],
+      ['pmax-logo-1200x300', '1200x300', 'Google PMax · Logo horizontal 4:1'], ['demandgen-300x600', '300x600', 'Demand Gen · Companion banner'],
+      ['adroll-300x250', '300x250', 'AdRoll · Medium rectangle'], ['adroll-300x600', '300x600', 'AdRoll · Half page'],
+      ['adroll-728x90', '728x90', 'AdRoll · Leaderboard'], ['adroll-970x250', '970x250', 'AdRoll · Billboard'],
+      ['adroll-336x280', '336x280', 'AdRoll · Large rectangle'], ['adroll-320x50', '320x50', 'AdRoll · Mobile leaderboard'],
+      ['adroll-200x200', '200x200', 'AdRoll · Small square'], ['adroll-160x600', '160x600', 'AdRoll · Wide skyscraper'],
+      ['adroll-250x250', '250x250', 'AdRoll · Square'], ['adroll-180x150', '180x150', 'AdRoll · Small rectangle'],
+      ['adroll-468x60', '468x60', 'AdRoll · Mobile banner']
+    ],
+    safeZone: {
+      'meta-1440x1800': '180px 0 180px 0', 'meta-1440x1440': '180px 0 180px 0', 'meta-1440x2560': '360px 150px 900px 150px', 'meta-1200x628': '5%',
+      'pmax-1200x628': '5%', 'pmax-1200x1200': '5%', 'pmax-960x1200': '5%', 'pmax-logo-1200x1200': '15%', 'pmax-logo-1200x300': '12% 8%',
+      'demandgen-300x600': '4%', 'adroll-300x250': '4%', 'adroll-300x600': '4%', 'adroll-728x90': '8% 2%', 'adroll-970x250': '6% 3%',
+      'adroll-336x280': '4%', 'adroll-320x50': '8% 3%', 'adroll-200x200': '5%', 'adroll-160x600': '4% 6%', 'adroll-250x250': '5%',
+      'adroll-180x150': '5%', 'adroll-468x60': '8% 2%'
+    },
+    keepOut: { 'meta-1440x2560': '1090 1500 350 1060' },
+    sizeLimit: { meta: [300, 'Meta'], pmax: [150, 'Google PMax'], demandgen: [150, 'Demand Gen'], adroll: [150, 'AdRoll'] },
+    sizeRule: {
+      meta: 'jpg png', pmax: 'jpg brand border copy-40', demandgen: 'jpg brand border', adroll: 'jpg brand border copy-40',
+      'meta-1200x628': 'no-logo no-cta', 'meta-1440x2560': 'story-copy', 'meta-1440x1800': 'feed-copy', 'meta-1440x1440': 'feed-copy',
+      'pmax-logo-1200x1200': 'logo-only', 'pmax-logo-1200x300': 'logo-only', 'adroll-320x50': 'copy-20', 'adroll-468x60': 'copy-20'
+    }
+  };
+  let SPEC = null; // { nets: {key: {name, kb, rules:Set}}, sizes: [{id, net, w, h, label, rules:Set, safe:[t,r,b,l], keep}] }
+
+  const S = {
+    mode: 'layers', flat: null, clean: null, layers: [], W0: 0, H0: 0, parts: [], groups: {}, subject: null,
+    plate: null, avg: '#888888', tool: 'headline', showLeft: false, bg: 'photo', scrim: 'off', darken: 0,
+    sizes: [], state: {}, scale: {}, main: null, mainInfo: null, missing: [], on: { meta: true, pmax: true, demandgen: true, adroll: true }, kb: {},
+    fmt: 'jpg', clients: [], client: '', db: null, nextId: 1
+  };
+
+  // ---------- capabilities (degrade gracefully) ----------
+  function claudeObj() {
+    try { if (window.claude && window.claude.use) return window.claude; } catch (e) {}
+    try { if (parent && parent !== window && parent.claude && parent.claude.use) return parent.claude; } catch (e) {}
+    return null;
+  }
+  function cap(name) {
+    const c = claudeObj();
+    if (!c) return Promise.resolve(null);
+    return Promise.race([c.use(name).catch(() => null), new Promise(r => setTimeout(() => r(null), 4000))]);
+  }
+  // 'ok' | 'declined' | 'unavailable'. The artifact viewer blocks <a download>, so without the downloads capability
+  // (it depends on the viewer's Claude account and organisation) files are offered in the Save files panel instead.
+  async function saveFile(blob, filename) {
+    const dl = await cap('downloads');
+    if (!dl) return 'unavailable';
+    try { await dl.save({ filename, data: blob }); return 'ok'; }
+    catch (e) { return e && (e.code === 'declined' || e.code === 'rate_limited') ? 'declined' : 'unavailable'; }
+  }
+  let saveUrls = [];
+  function showSavePanel(files) { // files: [{name, net, w, h, blob}]
+    saveUrls.forEach(u => URL.revokeObjectURL(u)); saveUrls = [];
+    const p = $('savePanel'), list = $('saveList'); list.innerHTML = '';
+    const nets = [...new Set(files.map(f => f.net))];
+    if (files.length > 1 && window.JSZip) { // the whole set as one ZIP, saved with the browser's own "Save link as"
+      const zr = document.createElement('div'); zr.className = 'row'; zr.style.cssText = 'gap:var(--space-2);align-items:center;flex-wrap:wrap';
+      const a = document.createElement('a'); a.textContent = 'Preparing ZIP…'; a.style.fontWeight = '600';
+      const hint = document.createElement('span'); hint.className = 'hint'; hint.style.minWidth = '0'; hint.textContent = 'Right-click this link (long-press on a phone) and choose Save link as.';
+      zr.append(a, hint); list.append(zr);
+      (async () => {
+        const zip = new JSZip(); for (const f of files) zip.folder(f.net).file(f.name, f.blob);
+        const blob = await zip.generateAsync({ type: 'blob' }), u = URL.createObjectURL(blob), c = curClient(); saveUrls.push(u);
+        const name = [c ? slug(c.name) : null, slug($('cname').value), 'all-sizes'].filter(Boolean).join('_') + '.zip';
+        a.href = u; a.download = name; a.textContent = `All sizes as ZIP · ${name} · ${Math.round(blob.size / 1000)} KB`;
+        a.onclick = (e) => { e.preventDefault(); notify('Right-click the link and choose Save link as.'); };
+      })();
+    }
+    for (const n of nets) {
+      const h = document.createElement('h3'); h.className = 'hint'; h.textContent = n; h.style.margin = 'var(--space-2) 0 0'; list.append(h);
+      const row = document.createElement('div'); row.style.cssText = 'display:flex;flex-wrap:wrap;gap:var(--space-3)';
+      for (const f of files.filter(q => q.net === n)) {
+        const u = URL.createObjectURL(f.blob); saveUrls.push(u);
+        const fig = document.createElement('figure'); fig.style.cssText = 'margin:0;display:grid;gap:4px;max-width:100%;min-width:0';
+        const img = document.createElement('img'); img.src = u; img.alt = f.name; img.title = f.name; img.style.cssText = `height:${f.w / f.h > 3 ? 48 : 140}px;max-width:100%;object-fit:contain;justify-self:start;border:1px solid var(--line)`;
+        const cap2 = document.createElement('figcaption'); cap2.className = 'hint'; cap2.style.cssText = 'display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-family:var(--font-mono);overflow-wrap:anywhere';
+        const nm = document.createElement('span'); nm.textContent = `${f.name} · ${f.w}×${f.h} · ${Math.round(f.blob.size / 1000)} KB`;
+        const cp = document.createElement('button'); cp.type = 'button'; cp.textContent = 'Copy name';
+        cp.onclick = () => { const sel = () => { const r = document.createRange(); r.selectNodeContents(nm); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }; try { navigator.clipboard.writeText(f.name).then(() => notify('File name copied.'), sel); } catch (e) { sel(); } };
+        cap2.append(nm, cp); fig.append(img, cap2); row.append(fig);
+      }
+      list.append(row);
+    }
+    p.hidden = false; p.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  async function filesFor(zs) { const out = []; for (const z of zs) { const r = await ensure(z); if (r) out.push({ name: fname(z, r.ext), net: SPEC.nets[z.net].name, w: z.w, h: z.h, blob: r.blob }); } return out; }
+
+  // ---------- tokens ----------
+  // insets "T R B L" (CSS shorthand) in px or %, as fractions of each side
+  function parseInset(v, w, h) {
+    const p = String(v).trim().split(/\s+/); if (!p.length || p.length > 4) return null;
+    const [t, r = t, b = t, l = r] = p;
+    const f = (s, dim) => /px$/.test(s) ? parseFloat(s) / dim : parseFloat(s) / 100;
+    const out = [f(t, h), f(r, w), f(b, h), f(l, w)];
+    return out.some(n => !(n >= 0 && n < .5)) ? null : out;
+  }
+  const netOf = (id) => id.split('-')[0];
+  function buildSpec(src) { // src: {adSize:[[name,value,usage]], safeZone:{}, keepOut:{}, sizeLimit:{net:[kb,name]}, sizeRule:{}}
+    const nets = {};
+    for (const [k, [kb, name]] of Object.entries(src.sizeLimit)) nets[k] = { name, kb, rules: new Set(String(src.sizeRule[k] || '').split(/\s+/).filter(Boolean)) };
+    const sizes = [];
+    for (const [id, value, usage] of src.adSize) {
+      const m = /^(\d+)x(\d+)$/.exec(String(value).trim()), net = netOf(id); if (!m) continue;
+      if (!nets[net]) nets[net] = { name: String(usage).split('·')[0].trim() || net, kb: 150, rules: new Set() };
+      const w = +m[1], h = +m[2], u = String(usage);
+      const label = (u.split('·')[1] || '').replace(/\(.*?\)/g, '').replace(/\.(\s.*)?$/, '').trim() || id;
+      const rules = new Set([...nets[net].rules, ...String(src.sizeRule[id] || '').split(/\s+/).filter(Boolean)]);
+      const safe = parseInset(src.safeZone[id] || (h / w > 1.6 ? '14% 6% 20% 6%' : w * h < 400000 ? '4%' : '5%'), w, h) || [.05, .05, .05, .05];
+      let keep = null; const kv = src.keepOut[id] && String(src.keepOut[id]).trim().split(/\s+/).map(parseFloat);
+      if (kv && kv.length === 4 && kv.every(n => n >= 0)) keep = { x: kv[0], y: kv[1], w: kv[2], h: kv[3] };
+      sizes.push({ id, net, w, h, label, rules, safe, keep });
+    }
+    return { nets, sizes };
+  }
+  async function loadTokens() {
+    const src = { adSize: FALLBACK.adSize, safeZone: { ...FALLBACK.safeZone }, keepOut: { ...FALLBACK.keepOut }, sizeLimit: { ...FALLBACK.sizeLimit }, sizeRule: { ...FALLBACK.sizeRule } };
+    try {
+      const t = await (await Promise.reject(new Error('Standalone demo uses built-in client defaults'))).json();
+      const list = (fam) => (t[fam] && Array.isArray(t[fam].tokens)) ? t[fam].tokens : [];
+      const ads = list('adSize').filter(x => /^[a-z]+-/.test(x.name) && !/^ad-/.test(x.name)).map(x => [x.name, x.value, x.usage || x.name]);
+      if (ads.length) {
+        src.adSize = ads; src.safeZone = {}; src.keepOut = {}; src.sizeRule = {};
+        for (const x of list('safeZone')) src.safeZone[x.name.replace(/^safe-/, '')] = x.value;
+        for (const x of list('keepOut')) src.keepOut[x.name.replace(/^keepout-/, '')] = x.value;
+        for (const x of list('sizeRule')) src.sizeRule[x.name.replace(/^rule-/, '')] = x.value;
+        const lim = {}; for (const x of list('sizeLimit')) { const kb = parseFloat(x.value); if (kb > 0) lim[x.name.replace(/^limit-/, '')] = [kb, String(x.usage || x.name).split(/\s[—-]\s/)[0].trim()]; }
+        if (Object.keys(lim).length) src.sizeLimit = lim;
+      }
+    } catch (e) { /* fallback spec */ }
+    SPEC = buildSpec(src);
+    for (const k in SPEC.nets) if (S.kb[k] == null) S.kb[k] = SPEC.nets[k].kb;
+    renderNets();
+  }
+  const fmtKB = (kb) => kb >= 1000 ? `${+(kb / 1000).toFixed(kb % 1000 ? 1 : 0)} MB` : `${kb} KB`;
+  function renderNets() {
+    const box = $('nets'); box.innerHTML = '';
+    for (const [k, n] of Object.entries(SPEC.nets)) {
+      const lab = document.createElement('label'); lab.className = 'chip'; lab.style.cssText = 'gap:6px;margin-right:var(--space-2)';
+      lab.innerHTML = `<input type="checkbox"> <b style="font-weight:500"></b> <input type="number" min="10" max="200000" style="width:84px;min-height:28px;padding:2px 6px" aria-label="File limit in KB">`;
+      lab.querySelector('b').textContent = n.name;
+      const [cb, num] = lab.querySelectorAll('input'); cb.checked = !!S.on[k]; num.value = S.kb[k];
+      num.title = `${n.name} limit: ${fmtKB(S.kb[k])}`;
+      cb.onchange = () => { S.on[k] = cb.checked; if (S.plate) buildCards(); };
+      let t; num.oninput = () => { S.kb[k] = Math.max(10, +num.value || n.kb); clearTimeout(t); t = setTimeout(() => S.sizes.filter(z => z.net === k).forEach(changed), 400); };
+      box.appendChild(lab);
+    }
+  }
+  const limitBytes = (z) => (S.kb[z.net] || 150) * 1000;
+
+  // ---------- clients ----------
+  const LS = 'portfolio-resizer-neutral-v2.clients';
+  async function loadClients() {
+    S.db = await cap('db');
+    let list = null;
+    if (S.db) {
+      try { const snap = await S.db.collection('clients').get(); list = snap.docs.map(d => ({ id: d.id, ...d.data() })); }
+      catch (e) { S.db = null; }
+    }
+    if (!list) { try { list = JSON.parse(localStorage.getItem(LS) || '[]'); } catch (e) { list = []; } }
+    S.clients = list.sort((a, b) => String(a.name).localeCompare(String(b.name)));
+    $('storeNote').textContent = S.db ? 'Clients are shared with your team.' : 'Clients are saved in this browser.';
+    renderClients();
+  }
+  async function persistClient(c, remove) {
+    if (S.db) {
+      try { const ref = S.db.doc('clients/' + c.id); remove ? await ref.delete() : await ref.set({ name: c.name, color: c.color, nets: c.nets || [], fmt: c.fmt }); return; }
+      catch (e) { $('storeNote').textContent = 'Only editors can save shared clients — saved in this browser instead.'; S.db = null; }
+    }
+    try { localStorage.setItem(LS, JSON.stringify(S.clients)); } catch (e) {}
+  }
+  const curClient = () => S.clients.find(x => x.id === S.client);
+  function renderClients() {
+    const sel = $('client'); sel.innerHTML = '';
+    sel.add(new Option('No client', ''));
+    for (const c of S.clients) sel.add(new Option(c.name, c.id));
+    sel.value = S.client; $('editClient').disabled = !S.client;
+    const c = curClient(); sel.style.borderLeft = c ? `6px solid ${c.color}` : '';
+  }
+  function applyClient() {
+    const c = curClient();
+    if (c) {
+      if (Array.isArray(c.nets) && c.nets.length) for (const k in SPEC.nets) S.on[k] = c.nets.includes(k);
+      if (c.fmt) { S.fmt = c.fmt; $('fmt').value = c.fmt; }
+      renderNets();
+    }
+    renderClients();
+    if (S.plate) buildCards();
+  }
+  let editing = null;
+  function openDlg(c) {
+    editing = c || null;
+    $('dlgTitle').textContent = c ? 'Edit client' : 'New client';
+    $('dName').value = c ? c.name : ''; $('dColor').value = c ? c.color : '#c2410c';
+    const box = $('dNets'); box.innerHTML = '';
+    for (const [k, n] of Object.entries(SPEC.nets)) {
+      const l = document.createElement('label'); l.className = 'chip hint'; l.innerHTML = '<input type="checkbox"> <span></span>';
+      l.querySelector('span').textContent = n.name; l.querySelector('input').value = k;
+      l.querySelector('input').checked = c && Array.isArray(c.nets) ? c.nets.includes(k) : !!S.on[k];
+      box.appendChild(l);
+    }
+    $('dFmt').value = c ? c.fmt || 'jpg' : 'jpg'; $('dDelete').hidden = !c;
+    $('dlg').returnValue = ''; $('dlg').showModal();
+  }
+  $('dlg').addEventListener('close', async () => {
+    if ($('dlg').returnValue !== 'save') return;
+    const name = $('dName').value.trim(); if (!name) return;
+    const c = editing || { id: slug(name) + '-' + Math.random().toString(36).slice(2, 6) };
+    Object.assign(c, { name, color: $('dColor').value, nets: [...$('dNets').querySelectorAll('input:checked')].map(i => i.value), fmt: $('dFmt').value });
+    if (!editing) S.clients.push(c);
+    S.client = c.id; await persistClient(c); applyClient();
+  });
+  $('dDelete').onclick = async () => {
+    if (!editing) return;
+    const del = $('dDelete');
+    if (!del.dataset.armed) { del.dataset.armed = '1'; del.textContent = `Delete “${editing.name}”? Click again`; setTimeout(() => { delete del.dataset.armed; del.textContent = 'Delete'; }, 4000); return; }
+    delete del.dataset.armed; del.textContent = 'Delete';
+    S.clients = S.clients.filter(x => x !== editing); await persistClient(editing, true);
+    S.client = ''; $('dlg').close('cancel'); renderClients(); if (S.plate) buildCards();
+  };
+  $('newClient').onclick = () => openDlg(null);
+  $('editClient').onclick = () => openDlg(curClient());
+  $('client').onchange = (e) => { S.client = e.target.value; applyClient(); };
+
+  // ---------- input modes ----------
+  const MODE_HINT = {
+    layers: 'Drop your finished ad in the first box: the tool copies it. Drop its pieces in the second box (the photo with no text, the logo, the headline…): the tool moves them around for each size.',
+    flatclean: 'Drop your finished ad and the same photo without any text. In step 2 you box each piece on the ad; the clean photo becomes the background.',
+    flat: 'Drop your finished ad. In step 2 you box each piece (logo, headline…); the tool lifts them off and fills the photo in behind them.'
+  };
+  let pick = null; // which slot the hidden file input fills
+  function setMode(m) {
+    S.mode = m; S.reg = null; S.keepSkipped = false; delete $('cname').dataset.touched; S.subjectAuto = undefined; S.flat = null; S.clean = null; S.layers = []; S.parts = []; S.subject = null; S.W0 = S.H0 = 0; S.plate = null; S.main = null; S.mainInfo = null; S.missing = [];
+    S.tool = m === 'layers' ? 'subject' : 'headline';
+    document.querySelectorAll('[data-mode]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mode === m)));
+    $('modeHint').textContent = MODE_HINT[m];
+    const slots = m === 'layers' ? [['main', 'Finished design', 'Your final ad as one image. The tool copies this'], ['layers', 'Pieces of the design', 'The photo without text, the logo, the headline… as separate files. Select several at once']]
+      : m === 'flatclean' ? [['flat', 'Finished design', 'Your final ad as one image'], ['clean', 'Photo without text', 'The same photo, nothing on it']]
+      : [['flat', 'Finished design', 'Your final ad as one image, PNG or JPG']];
+    const d = $('drops'); d.innerHTML = '';
+    for (const [slot, title, sub] of slots) {
+      const el = document.createElement('div'); el.className = 'drop'; el.tabIndex = 0; el.dataset.slot = slot; el.setAttribute('role', 'button');
+      el.innerHTML = `<div><b>${esc(title)}</b><br><span class="muted">${esc(sub)}.</span></div>`;
+      const open = () => { pick = slot; $('file').multiple = slot === 'layers'; $('file').click(); };
+      el.onclick = open; el.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } };
+      el.ondragover = (e) => { e.preventDefault(); el.classList.add('over'); };
+      el.ondragleave = () => el.classList.remove('over');
+      el.ondrop = (e) => { e.preventDefault(); el.classList.remove('over'); take(slot, [...e.dataTransfer.files]); };
+      d.appendChild(el);
+    }
+    $('srcWrap').hidden = true; $('layerList').hidden = true; S.keepSkipped = false;
+    (m === 'layers' ? $('st3slot') : $('st2slot')).appendChild($('srcWrap'));
+    updateSteps();
+    $('sections').innerHTML = '<p class="empty">Load a creative to see every size.</p>'; S.sizes = []; S.state = {}; queue = []; summary();
+  }
+  document.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => setMode(b.dataset.mode));
+  $('file').addEventListener('change', () => { const fs = [...$('file').files]; $('file').value = ''; if (fs.length) take(pick, fs); });
+  $('srcWrap').addEventListener('dragover', (e) => { e.preventDefault(); $('srcWrap').classList.add('over'); });
+  $('srcWrap').addEventListener('dragleave', () => $('srcWrap').classList.remove('over'));
+  $('srcWrap').addEventListener('drop', (e) => { e.preventDefault(); $('srcWrap').classList.remove('over'); take(S.mode === 'layers' ? 'layers' : 'flat', [...e.dataTransfer.files]); });
+
+  async function bitmap(f) {
+    if (!/^image\//.test(f.type)) throw new Error('not an image');
+    return createImageBitmap(f);
+  }
+  async function take(slot, files) {
+    files = files.filter(f => /^image\//.test(f.type));
+    if (!files.length) { notify('Please choose PNG, JPG or WebP images.'); return; }
+    if (slot === 'main' && files.length > 1) { // several files on the finished-design box: keep one as the design, the rest are pieces
+      const mi = Math.max(0, files.findIndex(f => guessRole(f.name) === 'main')), mf = files[mi];
+      try { setMain(await bitmap(mf), mf.name); } catch (e) { notify('One of those images could not be read. Try exporting it again as PNG or JPG.'); return; }
+      notify(`${mf.name} is the finished design; the other ${files.length - 1} files were added as pieces.`);
+      return take('layers', files.filter((_, i) => i !== mi));
+    }
+    try {
+      if (slot === 'layers') {
+        const items = []; for (const f of files) items.push({ f, role: guessRole(f.name), bmp: await bitmap(f) });
+        // a new photo or finished design while a creative is loaded = a new creative: don't mix it with the previous one
+        const oldBg = S.layers.find(l => l.role === 'background');
+        if (oldBg && items.some(it => it.role === 'main' || it.role === 'background' || (opaqueShare(it.bmp) > .97 && it.bmp.width * it.bmp.height >= oldBg.bmp.width * oldBg.bmp.height * .5))) {
+          S.layers = []; S.main = null; S.mainInfo = null; S.subject = null; S.subjectAuto = undefined; S.keepSkipped = false; S.reg = null; S.state = {}; S.scale = {};
+          delete $('cname').dataset.touched; const md = document.querySelector('.drop[data-slot=main]'); if (md) md.classList.remove('done');
+          notify('New creative: the previous pieces, Keep-in-view box and name were cleared.');
+        }
+        for (const { f, role, bmp } of items) { if (role === 'main') setMain(bmp, f.name); else S.layers.push({ id: S.nextId++, name: f.name, bmp, role, guessed: role !== 'other' || /deco|element|shape|icon|graphic/i.test(f.name) }); }
+        if (!S.layers.some(l => l.role === 'background')) { // the photo: the biggest file with no transparency, whatever its format or name
+          const cand = S.layers.filter(l => opaqueShare(l.bmp) > .97).sort((a, b) => b.bmp.width * b.bmp.height - a.bmp.width * a.bmp.height)[0];
+          if (cand) { cand.role = 'background'; cand.guessed = true; }
+        }
+        { const el = document.querySelector('.drop[data-slot=layers]'); if (el && S.layers.length) { el.classList.add('done'); el.querySelector('span').textContent = `${S.layers.length} piece${S.layers.length > 1 ? 's' : ''} added. Check them in step 2. Click to add more.`; } }
+        if (!$('cname').dataset.touched) $('cname').value = slug(files[0].name.replace(/\.[^.]+$/, '').replace(/[-_ ]?(bg|background|photo|logo|headline|title|sub.*|cta|button|badge)$/i, ''));
+      } else {
+        const bmp = await bitmap(files[0]);
+        if (slot === 'main') { setMain(bmp, files[0].name); }
+        else if (slot === 'flat') { S.flat = bmp; S.parts = []; S.subject = null; S.subjectAuto = undefined; S.keepSkipped = false; if (!$('cname').dataset.touched) $('cname').value = slug(files[0].name.replace(/\.[^.]+$/, '')); $('srcInfo').textContent = `Source ${bmp.width}×${bmp.height}`; }
+        else if (slot === 'clean') S.clean = bmp;
+        const el = document.querySelector(`.drop[data-slot=${slot}]`);
+        if (el) { el.classList.add('done'); el.querySelector('span').textContent = `${files[0].name} · ${bmp.width}×${bmp.height}. Click to replace.`; }
+      }
+    } catch (e) { notify('One of those images could not be read. Try exporting it again as PNG or JPG.'); return; }
+    rebuildAll(true);
+  }
+  $('cname').addEventListener('input', () => { $('cname').dataset.touched = '1'; });
+  function setMain(bmp, name) { // the finished design; blank margins trimmed so an exact copy never has white edges
+    const tb = trimBlank(bmp, bmp.width, bmp.height); S.main = tb ? tb.canvas : bmp; S.mainName = name; S._ms = {}; S._d0 = null; S.layers.forEach(l => { delete l.found; });
+    const el = document.querySelector('.drop[data-slot=main]');
+    if (el) { el.classList.add('done'); el.querySelector('span').textContent = `${name} · ${bmp.width}×${bmp.height}. Click to replace.`; }
+  }
+
+  function guessRole(name) { // whole words only: "Untitled" is not a title, Canva's "Copy of …" is not body copy
+    const w = name.toLowerCase().replace(/\.[^.]+$/, '').split(/[^a-z0-9]+/).filter(Boolean), has = (...xs) => w.some(t => xs.includes(t)), pre = (...xs) => w.some(t => xs.some(x => t.startsWith(x)));
+    const part = has('logo', 'logos', 'brandmark', 'cta', 'button', 'btn', 'badge', 'seal', 'sub', 'subhead', 'headline', 'title', 'product', 'bg', 'background');
+    if (has('main', 'final', 'master', 'finished', 'full') && !part) return 'main';
+    if (has('logo', 'logos', 'brandmark', 'wordmark')) return 'logo';
+    if (has('cta', 'button', 'btn')) return 'cta';
+    if (has('badge', 'seal', 'sticker', 'stamp', 'roundel')) return 'badge';
+    if (has('sub', 'subhead', 'subheadline', 'subtitle', 'body', 'desc', 'description', 'tagline', 'strap', 'strapline', 'support')) return 'subhead';
+    if (pre('headline', 'heading', 'header') || has('head', 'title', 'h1') || (has('main') && has('text'))) return 'headline';
+    if (has('product', 'pack', 'packshot', 'bottle', 'device')) return 'product';
+    if (has('subject', 'cutout', 'person', 'model', 'figure')) return 'product';
+    if (has('decoration', 'deco', 'element', 'shape', 'icon', 'graphic')) return 'other';
+    if (has('bg', 'background', 'backdrop', 'photo', 'image', 'img', 'hero', 'pic', 'picture')) return 'background';
+    return 'other';
+  }
+  function opaqueShare(bmp) { // share of a small copy's pixels that are fully opaque: photos are ~1, cut-out pieces much less
+    const c = mk(48, 48), x = c.getContext('2d', { willReadFrequently: true }); x.drawImage(bmp, 0, 0, 48, 48); const d = x.getImageData(0, 0, 48, 48).data;
+    let n = 0; for (let i = 3; i < d.length; i += 4) if (d[i] > 250) n++; return n / (48 * 48);
+  }
+
+  // ---------- building parts ----------
+  function trim(src) { // tight bounds of visible pixels
+    const c = mk(src.width, src.height), x = c.getContext('2d', { willReadFrequently: true }); x.drawImage(src, 0, 0);
+    const d = x.getImageData(0, 0, c.width, c.height).data, W = c.width, H = c.height;
+    let x0 = W, y0 = H, x1 = -1, y1 = -1;
+    for (let y = 0; y < H; y++) for (let i = y * W, X = 0; X < W; X++, i++) if (d[i * 4 + 3] > 8) { if (X < x0) x0 = X; if (X > x1) x1 = X; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+    if (x1 < 0) return null;
+    const w = x1 - x0 + 1, h = y1 - y0 + 1, out = mk(w, h); out.getContext('2d').drawImage(c, x0, y0, w, h, 0, 0, w, h);
+    return { canvas: out, x: x0, y: y0, w, h };
+  }
+  // The photo is often the uncropped original while the main design shows a crop of it. Find where the photo sits
+  // inside the main design (scale + offset) so the main design becomes the frame every size is measured against.
+  function registerPhoto(bmp, target) {
+    const M = target || S.main, lumArr = (src, w, h) => { const c = mk(w, h), x = c.getContext('2d', { willReadFrequently: true }); x.imageSmoothingQuality = 'high'; x.drawImage(src, 0, 0, w, h); const d = x.getImageData(0, 0, w, h).data, L = new Float32Array(w * h); for (let i = 0; i < L.length; i++) L[i] = .2126 * d[i * 4] + .7152 * d[i * 4 + 1] + .0722 * d[i * 4 + 2]; return L; };
+    const smin = Math.max(M.width / bmp.width, M.height / bmp.height);
+    const run = (aw, cands, span, np) => { // aw: analysis width of the main design; cands: scales to try; np: sample points
+      const k = aw / M.width, ah = Math.max(1, Math.round(M.height * k)), A = lumArr(M, aw, ah);
+      const pts = []; for (let i = 0; i < np; i++) { const x = (i * 37) % aw, y = Math.floor((i * 61) % ah); pts.push([x, y]); }
+      let best = null;
+      for (const s of cands) {
+        const bw = Math.round(bmp.width * s * k), bh = Math.round(bmp.height * s * k); if (bw < aw || bh < ah) continue;
+        const B = lumArr(bmp, bw, bh), mA = pts.reduce((a, [x, y]) => a + A[y * aw + x], 0) / pts.length;
+        const ox0 = span ? Math.max(0, span.ox * k - 3) : 0, ox1 = span ? Math.min(bw - aw, span.ox * k + 3) : bw - aw, oy0 = span ? Math.max(0, span.oy * k - 3) : 0, oy1 = span ? Math.min(bh - ah, span.oy * k + 3) : bh - ah;
+        for (let oy = Math.floor(oy0); oy <= oy1; oy++) for (let ox = Math.floor(ox0); ox <= ox1; ox++) {
+          let mB = 0; for (const [x, y] of pts) mB += B[(y + oy) * bw + x + ox]; mB /= pts.length;
+          let sum = 0; for (const [x, y] of pts) sum += Math.min(40, Math.abs(A[y * aw + x] - mA - (B[(y + oy) * bw + x + ox] - mB))); // truncated: text and overlays don't dominate
+          const sc = sum / pts.length; if (!best || sc < best.sc) best = { sc, s, ox: ox / k, oy: oy / k };
+        }
+      }
+      return best;
+    };
+    const coarse = []; for (let s = smin; s <= smin * 1.8; s *= 1.025) coarse.push(s);
+    let b = run(56, coarse, null, 220); if (!b) return null;
+    const mid = []; for (let s = b.s / 1.03; s <= b.s * 1.03; s *= 1.006) mid.push(s);
+    b = run(160, mid, b, 500) || b;
+    const fine = []; for (let s = b.s / 1.008; s <= b.s * 1.008; s *= 1.002) fine.push(s);
+    b = run(400, fine, b, 900) || b;
+    return b.sc < 18 ? { s: b.s, ox: b.ox, oy: b.oy, score: b.sc } : null;
+  }
+  function partsFromLayers() {
+    const bg = S.layers.find(l => l.role === 'background');
+    S.W0 = bg ? bg.bmp.width : 0; S.H0 = bg ? bg.bmp.height : 0; S.reg = null;
+    if (bg && S.main && Math.abs(S.main.width / S.main.height - S.W0 / S.H0) >= .015) { // photo shape differs from the design: register it
+      if (bg.reg === undefined || bg.regFor !== S.main) { bg.reg = registerPhoto(bg.bmp); bg.regFor = S.main; }
+      if (bg.reg) { S.reg = bg.reg; S.W0 = S.main.width; S.H0 = S.main.height; }
+    }
+    if (S._ms) for (const key in S._ms) if (key.startsWith('bg')) delete S._ms[key]; S._d0 = null; // background may have changed
+    S.parts = [];
+    for (const l of S.layers) {
+      if (l.role === 'background' || !S.W0) continue;
+      if (!l.trim) l.trim = trim(l.bmp);
+      const t = l.trim; if (!t) continue;
+      const sameShape = Math.abs(l.bmp.width / l.bmp.height - S.W0 / S.H0) < .01 && l.bmp.width >= S.W0 * .5, k = sameShape ? S.W0 / l.bmp.width : 1; // a full-canvas export, not a small square piece like a badge
+      let pos = sameShape && (t.w < l.bmp.width - 1 || t.h < l.bmp.height - 1), box = pos ? { x: t.x * k, y: t.y * k, w: t.w * k, h: t.h * k } : { x: 0, y: 0, w: t.w * k, h: t.h * k }, found = false;
+      if (!pos && mainUsable()) { if (l.found === undefined) l.found = locate(t.canvas); if (l.found) { box = l.found; pos = true; found = true; } }
+      S.parts.push({ id: l.id, role: l.role, name: l.name, canvas: t.canvas, layer: true, pos, found, box });
+    }
+  }
+  // ---------- main design: matching ----------
+  const mainImg = () => S.mode === 'layers' ? S.main : S.flat;
+  const mainUsable = () => !!(S.main && S.W0 && Math.abs(S.main.width / S.main.height - S.W0 / S.H0) < .015);
+  function mainSmall(maxW) { // downscaled RGBA of the main design, cached per width
+    S._ms = S._ms || {}; if (S._ms[maxW]) return S._ms[maxW];
+    const k = Math.min(1, maxW / S.main.width), w = Math.max(1, Math.round(S.main.width * k)), h = Math.max(1, Math.round(S.main.height * k)), c = mk(w, h), x = c.getContext('2d', { willReadFrequently: true });
+    x.imageSmoothingQuality = 'high'; x.drawImage(S.main, 0, 0, w, h); return (S._ms[maxW] = { w, h, k, d: x.getImageData(0, 0, w, h).data });
+  }
+  function bgSmall(A) { // the background at the main design's analysis size, darkened by the estimated overlay
+    const key = 'bg' + A.w; if (S._ms[key]) return S._ms[key];
+    const bg = S.layers.find(l => l.role === 'background'), c = mk(A.w, A.h), x = c.getContext('2d', { willReadFrequently: true });
+    x.imageSmoothingQuality = 'high'; x.drawImage(bg.bmp, 0, 0, A.w, A.h); const d = x.getImageData(0, 0, A.w, A.h).data;
+    if (S._d0 == null) { // global darkness estimate: elements are small, so the median brightness ratio is the overlay
+      const rs = [], lum = (D, i) => .2126 * D[i] + .7152 * D[i + 1] + .0722 * D[i + 2];
+      for (let i = 0; i < d.length; i += 16) { const lb = lum(d, i); if (lb > 25) rs.push(lum(A.d, i) / lb); }
+      rs.sort((a, b) => a - b); S._d0 = rs.length ? clamp(1 - rs[rs.length >> 1], 0, .8) : 0;
+    }
+    const f = 1 - S._d0; for (let i = 0; i < d.length; i += 4) { d[i] *= f; d[i + 1] *= f; d[i + 2] *= f; }
+    return (S._ms[key] = { d });
+  }
+  function tmpl(tc, tw, th) { // template samples over the whole box, transparent ones included: [dx, dy, r, g, b, alpha]
+    const c = mk(tw, th), x = c.getContext('2d', { willReadFrequently: true }); x.imageSmoothingQuality = 'high'; x.drawImage(tc, 0, 0, tw, th);
+    const d = x.getImageData(0, 0, tw, th).data, solid = [], clear = [];
+    for (let y = 0; y < th; y++) for (let X = 0; X < tw; X++) { const i = (y * tw + X) * 4, a = d[i + 3] / 255; (a > .5 ? solid : clear).push([X, y, d[i], d[i + 1], d[i + 2], a]); }
+    const pick = (arr, n) => { const st = Math.max(1, Math.floor(arr.length / n)); return arr.filter((_, i) => i % st === 0); };
+    return [...pick(solid, 180), ...pick(clear, 140)];
+  }
+  function search(A, B, pts, x0, x1, y0, y1, best) {
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+      let sum = 0; const lim = best.score * pts.length * 3;
+      for (let j = 0; j < pts.length && sum < lim; j++) {
+        const q = pts[j], i = ((y + q[1]) * A.w + x + q[0]) * 4, a = q[5];
+        sum += Math.abs(A.d[i] - (a * q[2] + (1 - a) * B.d[i])) + Math.abs(A.d[i + 1] - (a * q[3] + (1 - a) * B.d[i + 1])) + Math.abs(A.d[i + 2] - (a * q[4] + (1 - a) * B.d[i + 2]));
+      }
+      const sc = sum / (pts.length * 3); if (sc < best.score) { best.score = sc; best.x = x; best.y = y; }
+    }
+    return best;
+  }
+  function locate(tc) { // where an element sits in the main design, in background (W0) coordinates
+    const A = mainSmall(Math.min(S.main.width, 400)), AB = bgSmall(A), r0 = S.main.width / S.W0; let best = null;
+    for (const r of [r0, r0 * 2, r0 / 2]) {
+      const tw = Math.round(tc.width * r * A.k), th = Math.round(tc.height * r * A.k);
+      if (tw < 4 || th < 3 || tw >= A.w || th >= A.h) continue;
+      const pts = tmpl(tc, tw, th); if (pts.length < 8) continue;
+      const b = search(A, AB, pts, 0, A.w - tw, 0, A.h - th, { score: best ? best.score : 60, x: -1, y: -1 });
+      if (b.x >= 0 && (!best || b.score < best.score)) best = { ...b, r };
+    }
+    S._lastLocate = best; if (!best || best.score > 48) return null;
+    const B = mainSmall(Math.min(S.main.width, 720)), BB = bgSmall(B), f = B.k / A.k, tw = Math.round(tc.width * best.r * B.k), th = Math.round(tc.height * best.r * B.k);
+    const pts = tmpl(tc, tw, th), cx = Math.round(best.x * f), cy = Math.round(best.y * f), m = Math.ceil(f) + 2;
+    const b = search(B, BB, pts, Math.max(0, cx - m), Math.min(B.w - tw, cx + m), Math.max(0, cy - m), Math.min(B.h - th, cy + m), { score: 1e9, x: cx, y: cy });
+    const toW0 = 1 / B.k / r0;
+    return { x: b.x * toW0, y: b.y * toW0, w: tc.width * best.r / r0, h: tc.height * best.r / r0 };
+  }
+  function analyseMain() { // match the original's darkness and find anything in it that the layers don't cover
+    S.mainInfo = null; S.missing = []; if (S.mode !== 'layers' || !mainUsable() || !S.plate) return;
+    const w = 300, h = Math.max(1, Math.round(300 * S.H0 / S.W0)), k = w / S.W0, A = mainSmall(300);
+    const pc = mk(w, h), px = pc.getContext('2d', { willReadFrequently: true }); px.drawImage(S.plate, 0, 0, w, h); const P = px.getImageData(0, 0, w, h).data;
+    const mask = new Uint8Array(w * h);
+    for (const p of S.parts) { if (!p.pos) continue; const x0 = Math.max(0, Math.floor(p.box.x * k) - 3), y0 = Math.max(0, Math.floor(p.box.y * k) - 3), x1 = Math.min(w - 1, Math.ceil((p.box.x + p.box.w) * k) + 3), y1 = Math.min(h - 1, Math.ceil((p.box.y + p.box.h) * k) + 3); for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) mask[y * w + x] = 1; }
+    const ratios = [], lum = (d, i) => .2126 * d[i] + .7152 * d[i + 1] + .0722 * d[i + 2];
+    for (let j = 0; j < w * h; j += 3) { if (mask[j]) continue; const i = j * 4, lb = lum(P, i); if (lb > 25) ratios.push(lum(A.d, i) / lb); }
+    ratios.sort((a, b) => a - b); const r = ratios.length ? ratios[ratios.length >> 1] : 1, darken = r < .97 ? clamp(Math.round((1 - r) * 100), 0, 70) : 0;
+    // composite: background at that darkness + every element at its place, compared with the main design
+    const cc = mk(w, h), cx = cc.getContext('2d', { willReadFrequently: true }); cx.drawImage(S.plate, 0, 0, w, h);
+    if (darken) { cx.fillStyle = `rgba(0,0,0,${darken / 100})`; cx.fillRect(0, 0, w, h); }
+    for (const p of S.parts) if (p.pos) cx.drawImage(p.canvas, p.box.x * k, p.box.y * k, p.box.w * k, p.box.h * k);
+    const C = cx.getImageData(0, 0, w, h).data, cell = 10, gw = Math.ceil(w / cell), gh = Math.ceil(h / cell), bad = new Uint8Array(gw * gh);
+    for (let gy = 0; gy < gh; gy++) for (let gx = 0; gx < gw; gx++) {
+      let nb = 0, nt = 0;
+      for (let y = gy * cell; y < Math.min(h, gy * cell + cell); y++) for (let x = gx * cell; x < Math.min(w, gx * cell + cell); x++) { const i = (y * w + x) * 4; nt++; if ((Math.abs(C[i] - A.d[i]) + Math.abs(C[i + 1] - A.d[i + 1]) + Math.abs(C[i + 2] - A.d[i + 2])) / 3 > 50) nb++; }
+      if (nb / nt > .3) bad[gy * gw + gx] = 1;
+    }
+    const total = bad.reduce((a, v) => a + v, 0), seen = new Uint8Array(gw * gh), boxes = [];
+    for (let i = 0; i < gw * gh; i++) { // connected areas of differing cells
+      if (!bad[i] || seen[i]) continue; const st = [i]; seen[i] = 1; let x0 = 1e9, y0 = 1e9, x1 = -1, y1 = -1, c = 0;
+      while (st.length) { const q = st.pop(), qx = q % gw, qy = (q / gw) | 0; c++; x0 = Math.min(x0, qx); y0 = Math.min(y0, qy); x1 = Math.max(x1, qx); y1 = Math.max(y1, qy);
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const nx = qx + dx, ny = qy + dy, ni = ny * gw + nx; if (nx >= 0 && ny >= 0 && nx < gw && ny < gh && bad[ni] && !seen[ni]) { seen[ni] = 1; st.push(ni); } } }
+      if (c >= 2) boxes.push({ x: x0 * cell / k, y: y0 * cell / k, w: (x1 - x0 + 1) * cell / k, h: (y1 - y0 + 1) * cell / k });
+    }
+    const effect = total / (gw * gh) > .35;
+    S.missing = effect ? [] : boxes;
+    S.mainInfo = { darken, effect, located: S.parts.filter(p => p.found).length, unplaced: S.parts.filter(p => !p.pos).map(p => p.name) };
+  }
+  function faceSubject() { // people-led photos: the top-most large skin-tone region is a face; subject = head and shoulders around it
+    const w = 180, h = Math.max(1, Math.round(180 * S.H0 / S.W0)), c = mk(w, h), x = c.getContext('2d', { willReadFrequently: true });
+    x.drawImage(S.plate, 0, 0, w, h); const d = x.getImageData(0, 0, w, h).data, skin = new Uint8Array(w * h);
+    for (let j = 0; j < w * h; j++) { const r = d[j * 4], g = d[j * 4 + 1], b = d[j * 4 + 2], mx = Math.max(r, g, b), mn = Math.min(r, g, b); skin[j] = r > 95 && g > 40 && b > 20 && mx - mn > 15 && r - g > 15 && r > b && (r - b) / r > .28 ? 1 : 0; }
+    const seen = new Uint8Array(w * h), comps = [];
+    for (let j = 0; j < w * h; j++) {
+      if (!skin[j] || seen[j]) continue; const st = [j]; seen[j] = 1; let x0 = w, y0 = h, x1 = 0, y1 = 0, n = 0;
+      while (st.length) { const q = st.pop(), qx = q % w, qy = (q / w) | 0; n++; x0 = Math.min(x0, qx); y0 = Math.min(y0, qy); x1 = Math.max(x1, qx); y1 = Math.max(y1, qy);
+        for (const nb of [q - 1, q + 1, q - w, q + w]) if (nb >= 0 && nb < w * h && !seen[nb] && skin[nb] && Math.abs((nb % w) - qx) <= 1) { seen[nb] = 1; st.push(nb); } }
+      const bw = x1 - x0 + 1, bh = y1 - y0 + 1;
+      if (n >= w * h * .006 && bh >= bw * .7 && bh <= bw * 2.2 && n / (bw * bh) > .35) comps.push({ n, x0, y0, bw, bh }); // face-shaped and solid, not a thin arm or scattered noise
+    }
+    if (!comps.length) return null;
+    const big = Math.max(...comps.map(q => q.n)), f = comps.filter(q => q.n >= big * .5).sort((a, b) => a.y0 - b.y0)[0], k = S.W0 / w;
+    const face = { x: f.x0 * k, y: f.y0 * k, w: f.bw * k, h: f.bh * k };
+    const x0 = Math.max(0, face.x - face.w * .45), y0 = Math.max(0, face.y - face.h * .5), x1 = Math.min(S.W0, face.x + face.w * 1.45), y1 = Math.min(S.H0, face.y + face.h * 2.2);
+    return { x: x0, y: y0, w: x1 - x0, h: y1 - y0, face };
+  }
+  function autoSubject() { // a face when the photo has one; otherwise the most eye-catching blob: colour far from the border colour + strong edges
+    if (!S.plate) return null;
+    const fs = faceSubject(); if (fs) return fs;
+    const w = 160, h = Math.max(1, Math.round(160 * S.H0 / S.W0)), c = mk(w, h), x = c.getContext('2d', { willReadFrequently: true });
+    x.drawImage(S.plate, 0, 0, w, h); const d = x.getImageData(0, 0, w, h).data, R = [], G = [], B = [];
+    for (let X = 0; X < w; X++) for (const Y of [0, h - 1]) { const i = (Y * w + X) * 4; R.push(d[i]); G.push(d[i + 1]); B.push(d[i + 2]); }
+    for (let Y = 0; Y < h; Y++) for (const X of [0, w - 1]) { const i = (Y * w + X) * 4; R.push(d[i]); G.push(d[i + 1]); B.push(d[i + 2]); }
+    const med = (a) => a.sort((m, q) => m - q)[a.length >> 1], br = med(R), bgc = med(G), bb = med(B), L = new Float32Array(w * h), sc0 = new Float32Array(w * h);
+    for (let j = 0; j < w * h; j++) { const i = j * 4; L[j] = .2126 * d[i] + .7152 * d[i + 1] + .0722 * d[i + 2]; }
+    for (let y = 1; y < h - 1; y++) for (let X = 1; X < w - 1; X++) {
+      const j = y * w + X, i = j * 4, cd = Math.hypot(d[i] - br, d[i + 1] - bgc, d[i + 2] - bb), ed = Math.abs(L[j + 1] - L[j - 1]) + Math.abs(L[j + w] - L[j - w]);
+      sc0[j] = cd + ed * .6;
+    }
+    const bl = new Float32Array(w * h), r = 3; // box blur
+    for (let y = 0; y < h; y++) for (let X = 0; X < w; X++) { let s = 0, n = 0; for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) { const yy = y + dy, xx = X + dx; if (yy >= 0 && xx >= 0 && yy < h && xx < w) { s += sc0[yy * w + xx]; n++; } } bl[y * w + X] = s / n; }
+    const sorted = Array.from(bl).sort((a, b) => a - b), thr = Math.max(sorted[Math.floor(sorted.length * .75)], 25);
+    const seen = new Uint8Array(w * h); let best = null;
+    for (let j = 0; j < w * h; j++) {
+      if (seen[j] || bl[j] < thr) continue; const st = [j]; seen[j] = 1; let x0 = w, y0 = h, x1 = 0, y1 = 0, cnt = 0;
+      while (st.length) { const q = st.pop(), qx = q % w, qy = (q / w) | 0; cnt++; x0 = Math.min(x0, qx); y0 = Math.min(y0, qy); x1 = Math.max(x1, qx); y1 = Math.max(y1, qy);
+        for (const nb of [q - 1, q + 1, q - w, q + w]) if (nb >= 0 && nb < w * h && !seen[nb] && bl[nb] >= thr && Math.abs((nb % w) - qx) <= 1) { seen[nb] = 1; st.push(nb); } }
+      if (!best || cnt > best.cnt) best = { cnt, x0, y0, x1, y1 };
+    }
+    if (!best) return null;
+    const k = S.W0 / w, box = { x: best.x0 * k, y: best.y0 * k, w: (best.x1 - best.x0 + 1) * k, h: (best.y1 - best.y0 + 1) * k };
+    const frac = area(box) / (S.W0 * S.H0); return frac < .03 || frac > .7 ? null : box;
+  }
+  function refreshAutoSubject() { if (S.subjectAuto === false || S.keepSkipped) return; const b = autoSubject(); S.subject = b; S.subjectAuto = !!b; }
+  function stats(p) { // per-part pixel statistics used by the cut-out keys
+    const b = p.box, c = mk(b.w, b.h), x = c.getContext('2d', { willReadFrequently: true });
+    x.drawImage(S.flat, b.x, b.y, b.w, b.h, 0, 0, c.width, c.height);
+    const img = x.getImageData(0, 0, c.width, c.height), d = img.data, W = c.width, H = c.height, L = new Float32Array(W * H), lums = [];
+    for (let i = 0, j = 0; i < d.length; i += 4, j++) { L[j] = .2126 * d[i] + .7152 * d[i + 1] + .0722 * d[i + 2]; if (j % 3 === 0) lums.push(L[j]); }
+    lums.sort((a, b) => a - b);
+    const q = (f) => lums[Math.min(lums.length - 1, Math.floor(f * lums.length))];
+    const R = [], G = [], B = [], BL = [], st = Math.max(1, Math.floor((W + H) / 400)), push = (j) => { R.push(d[j * 4]); G.push(d[j * 4 + 1]); B.push(d[j * 4 + 2]); BL.push(L[j]); };
+    for (let X = 0; X < W; X += st) { push(X); push((H - 1) * W + X); }
+    for (let Y = 0; Y < H; Y += st) { push(Y * W); push(Y * W + W - 1); }
+    const med = (a) => a.slice().sort((m, n) => m - n)[a.length >> 1];
+    const mean = BL.reduce((a, v) => a + v, 0) / BL.length, sd = Math.sqrt(BL.reduce((a, v) => a + (v - mean) ** 2, 0) / BL.length);
+    p.st = { img, L, W, H, lo: q(.08), mid: q(.5), hi: q(.97), edge: [med(R), med(G), med(B)], edgeSd: sd };
+  }
+  function guessCut(p) {
+    const s = p.st; if (s.edgeSd < 10) return 'flat';
+    return (s.hi - s.mid) >= (s.mid - s.lo) ? 'light' : 'dark';
+  }
+  function extract(p) { // cut a tagged part out of the flat image + its hard mask for the background fill
+    const s = p.st, W = s.W, H = s.H, src = s.img.data, out = new ImageData(W, H), o = out.data, k = p.strength / 100;
+    let thr, soft;
+    if (p.cut === 'light') { thr = s.mid + (s.hi - s.mid) * (.75 - .55 * k); soft = Math.max(6, (s.hi - s.mid) * .12); }
+    if (p.cut === 'dark') { thr = s.mid - (s.mid - s.lo) * (.75 - .55 * k); soft = Math.max(6, (s.mid - s.lo) * .12); }
+    const tol = 20 + 70 * k, [er, eg, eb] = s.edge;
+    for (let i = 0, j = 0; i < src.length; i += 4, j++) {
+      let a = 1;
+      if (p.cut === 'light') a = clamp((s.L[j] - thr) / soft + .5, 0, 1);
+      else if (p.cut === 'dark') a = clamp((thr - s.L[j]) / soft + .5, 0, 1);
+      else if (p.cut === 'flat') { const dr = src[i] - er, dg = src[i + 1] - eg, db = src[i + 2] - eb, dist = Math.sqrt(dr * dr + dg * dg + db * db); a = clamp((dist - tol) / tol, 0, 1); }
+      o[i] = src[i]; o[i + 1] = src[i + 1]; o[i + 2] = src[i + 2]; o[i + 3] = Math.round(src[i + 3] * a);
+    }
+    const c = mk(W, H); c.getContext('2d').putImageData(out, 0, 0); p.canvas = c;
+    // hard, widened mask: everything that was lifted gets removed from the background
+    const m = new ImageData(W, H), md = m.data;
+    for (let i = 3; i < o.length; i += 4) if (p.cut === 'box' || o[i] > 20) { md[i - 3] = md[i - 2] = md[i - 1] = 255; md[i] = 255; }
+    const mc = mk(W, H); mc.getContext('2d').putImageData(m, 0, 0);
+    const r = Math.max(2, Math.round(Math.max(S.W0, S.H0) * .004)), dm = mk(W + 2 * r, H + 2 * r), dx = dm.getContext('2d');
+    for (let a = 0; a < 16; a++) { const t = a / 16 * Math.PI * 2; dx.drawImage(mc, r + Math.cos(t) * r, r + Math.sin(t) * r); dx.drawImage(mc, r + Math.cos(t) * r / 2, r + Math.sin(t) * r / 2); }
+    p.mask = dm; p.maskPad = r;
+  }
+
+  // background: layers/clean photo as-is; flat = every lifted pixel removed and filled from its surroundings (push-pull)
+  function buildPlate() {
+    let base;
+    if (S.mode === 'layers') {
+      const bg = S.layers.find(l => l.role === 'background'), r = S.reg; base = mk(S.W0, S.H0); const bx = base.getContext('2d'); bx.imageSmoothingQuality = 'high';
+      if (r) bx.drawImage(bg.bmp, -r.ox, -r.oy, bg.bmp.width * r.s, bg.bmp.height * r.s); // the designer's crop of the photo
+      else bx.drawImage(bg.bmp, 0, 0, S.W0, S.H0);
+    }
+    else if (S.mode === 'flatclean' && S.clean) { // line the clean photo up with the finished design (it may be uncropped or framed differently)
+      base = mk(S.W0, S.H0); const bx = base.getContext('2d'); bx.imageSmoothingQuality = 'high';
+      if (S.clean.regFor !== S.flat) { S.clean.reg = registerPhoto(S.clean, S.flat); S.clean.regFor = S.flat; }
+      const r = S.clean.reg; S.reg = r || null;
+      if (r) bx.drawImage(S.clean, -r.ox, -r.oy, S.clean.width * r.s, S.clean.height * r.s);
+      else { const s = Math.max(S.W0 / S.clean.width, S.H0 / S.clean.height), w = S.clean.width * s, h = S.clean.height * s; bx.drawImage(S.clean, (S.W0 - w) / 2, (S.H0 - h) / 2, w, h); }
+    } else {
+      base = mk(S.W0, S.H0); const bx = base.getContext('2d'); bx.drawImage(S.flat, 0, 0);
+      if (S.mode === 'flat' && S.parts.length) {
+        bx.globalCompositeOperation = 'destination-out';
+        for (const p of S.parts) bx.drawImage(p.mask, Math.round(p.box.x) - p.maskPad, Math.round(p.box.y) - p.maskPad);
+        bx.globalCompositeOperation = 'source-over';
+        pushPull(base);
+        // soften a feathered zone around the removed parts so filled holes don't read as letter shapes
+        const r = Math.max(4, Math.round(Math.max(S.W0, S.H0) * .012));
+        const fm = mk(S.W0, S.H0), fx = fm.getContext('2d'); fx.filter = `blur(${r}px)`;
+        for (let n = 0; n < 3; n++) for (const p of S.parts) fx.drawImage(p.mask, Math.round(p.box.x) - p.maskPad, Math.round(p.box.y) - p.maskPad);
+        const soft = mk(S.W0, S.H0), sx = soft.getContext('2d'); sx.filter = `blur(${r}px)`; sx.drawImage(base, 0, 0); sx.filter = 'none';
+        sx.globalCompositeOperation = 'destination-in'; sx.drawImage(fm, 0, 0);
+        bx.drawImage(soft, 0, 0);
+      }
+    }
+    const tb = trimBlank(base, S.W0, S.H0); S.trimmed = tb ? tb.m : null; if (tb) base = tb.canvas;
+    const one = mk(1, 1), ox = one.getContext('2d', { willReadFrequently: true }); ox.drawImage(base, 0, 0, 1, 1);
+    const d = ox.getImageData(0, 0, 1, 1).data; S.avg = `rgb(${d[0]},${d[1]},${d[2]})`;
+    S.plate = base;
+    // the whole photo in the design's coordinates (it may reach past the designer's crop): used where designers re-frame
+    S.plateFull = base; S.fullRect = { x: 0, y: 0, w: S.W0, h: S.H0 };
+    const photo = S.mode === 'layers' ? (S.layers.find(l => l.role === 'background') || {}).bmp : S.mode === 'flatclean' ? S.clean : null;
+    if (photo && S.reg) {
+      const bg = { bmp: photo }, r = S.reg, fw = Math.round(bg.bmp.width * r.s), fh = Math.round(bg.bmp.height * r.s), f = mk(fw, fh), fx = f.getContext('2d');
+      fx.imageSmoothingQuality = 'high'; fx.drawImage(bg.bmp, 0, 0, fw, fh); S.plateFull = f; S.fullRect = { x: -r.ox, y: -r.oy, w: fw, h: fh };
+    }
+  }
+  // fills transparent holes from their surroundings with premultiplied pyramid maths (no dark halos)
+  function pushPull(base) {
+    const bx = base.getContext('2d', { willReadFrequently: true }), img = bx.getImageData(0, 0, base.width, base.height), d = img.data;
+    let W = base.width, H = base.height, n = W * H;
+    const L0 = { W, H, R: new Float32Array(n), G: new Float32Array(n), B: new Float32Array(n), A: new Float32Array(n) };
+    for (let i = 0, j = 0; j < n; i += 4, j++) { const a = d[i + 3] / 255; L0.A[j] = a; L0.R[j] = d[i] * a; L0.G[j] = d[i + 1] * a; L0.B[j] = d[i + 2] * a; }
+    const lv = [L0];
+    while (W > 1 || H > 1) { // push: 2x2 premultiplied averages
+      const P = lv[lv.length - 1], w2 = Math.ceil(W / 2), h2 = Math.ceil(H / 2), m = w2 * h2;
+      const C = { W: w2, H: h2, R: new Float32Array(m), G: new Float32Array(m), B: new Float32Array(m), A: new Float32Array(m) };
+      for (let y = 0; y < h2; y++) for (let x = 0; x < w2; x++) {
+        let r = 0, g = 0, b = 0, a = 0, c = 0;
+        for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++) {
+          const X = 2 * x + dx, Y = 2 * y + dy; if (X >= W || Y >= H) continue;
+          const k = Y * W + X; r += P.R[k]; g += P.G[k]; b += P.B[k]; a += P.A[k]; c++;
+        }
+        const o = y * w2 + x; C.R[o] = r / c; C.G[o] = g / c; C.B[o] = b / c; C.A[o] = a / c;
+      }
+      lv.push(C); W = w2; H = h2;
+    }
+    const top = lv[lv.length - 1];
+    if (top.A[0] > 0) { top.R[0] /= top.A[0]; top.G[0] /= top.A[0]; top.B[0] /= top.A[0]; } else { top.R[0] = top.G[0] = top.B[0] = 128; }
+    top.A[0] = 1;
+    for (let i = lv.length - 2; i >= 0; i--) { // pull: fill what's missing from the (already full) coarser level, bilinear
+      const C = lv[i], P = lv[i + 1];
+      for (let y = 0; y < C.H; y++) {
+        const fy = clamp((y + .5) / 2 - .5, 0, P.H - 1), y0 = Math.floor(fy), y1 = Math.min(P.H - 1, y0 + 1), ty = fy - y0;
+        for (let x = 0; x < C.W; x++) {
+          const k = y * C.W + x, a = C.A[k];
+          if (a >= .999) { C.R[k] /= a; C.G[k] /= a; C.B[k] /= a; C.A[k] = 1; continue; }
+          const fx = clamp((x + .5) / 2 - .5, 0, P.W - 1), x0 = Math.floor(fx), x1 = Math.min(P.W - 1, x0 + 1), tx = fx - x0;
+          const i00 = y0 * P.W + x0, i01 = y0 * P.W + x1, i10 = y1 * P.W + x0, i11 = y1 * P.W + x1;
+          const bl = (A) => (A[i00] * (1 - tx) + A[i01] * tx) * (1 - ty) + (A[i10] * (1 - tx) + A[i11] * tx) * ty;
+          C.R[k] = C.R[k] + (1 - a) * bl(P.R); C.G[k] = C.G[k] + (1 - a) * bl(P.G); C.B[k] = C.B[k] + (1 - a) * bl(P.B); C.A[k] = 1;
+        }
+      }
+    }
+    for (let i = 0, j = 0; j < n; i += 4, j++) { d[i] = L0.R[j]; d[i + 1] = L0.G[j]; d[i + 2] = L0.B[j]; d[i + 3] = 255; }
+    bx.putImageData(img, 0, 0);
+  }
+
+  // parts with the same role form a group that keeps its original arrangement; "other" joins the nearest part
+  function buildGroups() {
+    const G = {}, main = S.parts.filter(p => !DECOS.includes(p.role));
+    const gap = (a, b) => Math.hypot(Math.max(0, a.x - (b.x + b.w), b.x - (a.x + a.w)), Math.max(0, a.y - (b.y + b.h), b.y - (a.y + a.h)));
+    for (const p of S.parts) {
+      let key = DECOS.includes(p.role) ? 'other' : p.role;
+      if (key === 'other') {
+        const free = DECOS.find(d => !G[d]);
+        if (free) key = free;
+        else if (main.length && p.pos !== false) { const near = main.filter(m => m.pos !== false).sort((a, b) => gap(p.box, a.box) - gap(p.box, b.box))[0]; if (near) key = near.role; }
+      }
+      (G[key] = G[key] || { members: [] }).members.push(p);
+    }
+    for (const k in G) {
+      const ms = G[k].members, placed = ms.filter(m => m.pos !== false);
+      if (placed.length === ms.length) {
+        const x0 = Math.min(...ms.map(m => m.box.x)), y0 = Math.min(...ms.map(m => m.box.y));
+        G[k].b = { x: x0, y: y0, w: Math.max(...ms.map(m => m.box.x + m.box.w)) - x0, h: Math.max(...ms.map(m => m.box.y + m.box.h)) - y0 };
+        G[k].pos = true;
+      } else { // unpositioned layers: stack them vertically
+        let y = 0; const w = Math.max(...ms.map(m => m.box.w));
+        for (const m of ms) { m.rel = { x: (w - m.box.w) / 2, y }; y += m.box.h * 1.1; }
+        G[k].b = { x: 0, y: 0, w, h: y - ms[ms.length - 1].box.h * .1 }; G[k].pos = false;
+      }
+    }
+    S.groups = G;
+  }
+  const relOf = (g, m) => g.pos ? { x: m.box.x - g.b.x, y: m.box.y - g.b.y } : m.rel;
+
+  function rebuildAll(fresh) {
+    if (S.mode === 'layers') {
+      renderLayerList();
+      if (!S.layers.some(l => l.role === 'background')) { $('srcWrap').hidden = true; S.sizes = []; $('sections').innerHTML = '<p class="empty">In step 2, set one piece to <b>Photo (background)</b>: the photo with no text on it.</p>'; summary(); updateSteps(); return; }
+      partsFromLayers();
+    } else {
+      if (!S.flat || (S.mode === 'flatclean' && !S.clean)) { summary(); updateSteps(); return; }
+      S.W0 = S.flat.width; S.H0 = S.flat.height;
+    }
+    buildPlate(); buildGroups(); analyseMain();
+    if (fresh && S.subjectAuto !== false) S.subject = null; refreshAutoSubject();
+    if (fresh && S.mainInfo) { S.darken = S.mainInfo.darken; $('darken').value = S.darken; $('darkenV').textContent = S.darken + '%'; }
+    $('srcWrap').hidden = false;
+    renderTools(); renderParts(); updateSteps(); drawSource();
+    if (fresh) { S.state = {}; S.scale = {}; }
+    checkMargins();
+    renderPartSizes();
+    if (fresh || !S.sizes.length) buildCards(); else { S.sizes.forEach(z => { pruneSize(z); renderChips(z); }); invalidateAll(); }
+    updateSteps();
+  }
+  function edgeMargins(img) { // px of near-white / transparent band on each side of an uploaded image
+    const W = img.width, H = img.height, k = Math.min(1, 600 / Math.max(W, H)), w = Math.max(1, Math.round(W * k)), h = Math.max(1, Math.round(H * k));
+    const c = mk(w, h), x = c.getContext('2d', { willReadFrequently: true }); x.drawImage(img, 0, 0, w, h); const d = x.getImageData(0, 0, w, h).data;
+    const blank = (i) => d[i + 3] < 24 || (d[i] > 238 && d[i + 1] > 238 && d[i + 2] > 238);
+    const colBlank = (X) => { let b = 0; for (let Y = 0; Y < h; Y++) b += blank((Y * w + X) * 4); return b / h > .97; };
+    const rowBlank = (Y) => { let b = 0; for (let X = 0; X < w; X++) b += blank((Y * w + X) * 4); return b / w > .97; };
+    let l = 0, r = 0, t = 0, bt = 0;
+    while (l < w / 3 && colBlank(l)) l++; while (r < w / 3 && colBlank(w - 1 - r)) r++;
+    while (t < h / 3 && rowBlank(t)) t++; while (bt < h / 3 && rowBlank(h - 1 - bt)) bt++;
+    const whiteBg = l >= Math.floor(w / 3) || r >= Math.floor(w / 3) || t >= Math.floor(h / 3) || bt >= Math.floor(h / 3);
+    return { left: Math.round(l / k), right: Math.round(r / k), top: Math.round(t / k), bottom: Math.round(bt / k), whiteBg, pad: Math.ceil(1 / k) + 1 };
+  }
+  function trimBlank(img, W, H) { // returns {canvas, m} when img has a blank margin, else null
+    const m = edgeMargins(img); if (m.whiteBg || Math.max(m.left, m.right, m.top, m.bottom) < 3) return null;
+    const pad = m.pad;
+    const x = m.left ? m.left + pad : 0, y = m.top ? m.top + pad : 0;
+    const w = img.width - x - (m.right ? m.right + pad : 0), h = img.height - y - (m.bottom ? m.bottom + pad : 0);
+    if (w < img.width * .3 || h < img.height * .3) return null;
+    // content area in canvas units, then scaled up just enough to cover the canvas again (aspect kept)
+    const c = mk(W, H), cx = c.getContext('2d'), dw = w * W / img.width, dh = h * H / img.height, f = Math.max(W / dw, H / dh);
+    cx.imageSmoothingQuality = 'high'; cx.drawImage(img, x, y, w, h, (W - dw * f) / 2, (H - dh * f) / 2, dw * f, dh * f);
+    return { canvas: c, m };
+  }
+  function checkMargins() {
+    const el = $('marginWarn'), m = S.trimmed; el.hidden = !m; if (!m) return;
+    const sides = ['left', 'right', 'top', 'bottom'].filter(k => m[k] >= 3).map(k => `${k} ${m[k]}px`);
+    el.textContent = `Your background had a white or transparent margin (${sides.join(', ')}). It was trimmed automatically, so no size gets white edges. For the sharpest result, export it again without the margin.`;
+  }
+  function setSt(id, text, cls) { const e = $(id); e.textContent = text; e.className = 'st' + (cls ? ' ' + cls : ''); }
+  function updateSteps() {
+    const lay = S.mode === 'layers';
+    const up = lay ? S.layers.some(l => l.role === 'background') : !!S.flat && (S.mode !== 'flatclean' || !!S.clean);
+    setSt('st1s', up ? 'Done' : 'To do', up ? 'ok' : '');
+    for (const id of ['st2', 'st3', 'st4']) $(id).classList.toggle('locked', !up);
+    $('st2t').textContent = lay ? 'Check each piece' : 'Box each piece on your design';
+    if (lay) {
+      const unknown = S.layers.filter(l => l.role === 'other' && !l.guessed).length;
+      $('st2h').innerHTML = 'Tell the tool what each piece is, so it knows where it belongs in each size (the logo at the top, the button at the bottom…). Pieces are recognised from their file names; only change the ones that are wrong.';
+      setSt('st2s', !up ? '' : unknown ? `Check ${unknown}` : 'All recognised', unknown ? 'warn' : 'ok');
+    } else {
+      $('st2h').innerHTML = 'Pick what you are marking (Logo, Headline…) and drag a box around it on the image. Mark every piece; several boxes per kind are fine. Turn on <b>Show what\'s left</b> to spot anything you missed.';
+      setSt('st2s', !up ? '' : S.parts.length ? `${S.parts.length} marked` : 'To do', S.parts.length ? 'ok' : 'warn');
+    }
+    setSt('st3s', S.subject ? (S.subjectAuto ? 'Found automatically' : 'Done') : S.keepSkipped ? 'Skipped: centre kept' : 'Optional', S.subject ? 'ok' : '');
+    $('st3h').innerHTML = S.tool === 'subject' ? '<span class="drawhint">Now drag a box on the image.</span>' : (S.subjectAuto ? 'The dashed box was found automatically. Draw your own if it\'s wrong.' : S.subject ? 'Draw again to replace it.' : '');
+    $('skipKeep').textContent = S.subject ? 'Remove box' : 'Skip';
+    setSt('st4s', S.sizes.length ? `${S.sizes.length} sizes` : '', S.sizes.length ? 'ok' : '');
+  }
+  $('drawKeep').onclick = () => { S.tool = 'subject'; renderTools(); updateSteps(); $('src').scrollIntoView({ block: 'center', behavior: 'smooth' }); };
+  $('skipKeep').onclick = () => { S.keepSkipped = true; S.subjectAuto = false; if (S.tool === 'subject' && S.mode !== 'layers') S.tool = 'headline'; if (S.subject) { S.subject = null; S.sizes.forEach(z => { z.cx = z.cy = null; }); partsChanged(); } else updateSteps(); };
+  $('goSizes').onclick = () => $('sections').scrollIntoView({ block: 'start', behavior: 'smooth' });
+  function partsChanged() { buildPlate(); checkMargins(); buildGroups(); renderPartSizes(); renderTools(); renderParts(); drawSource(); S.sizes.forEach(z => { pruneSize(z); renderChips(z); }); invalidateAll(); updateSteps(); }
+  function pruneSize(z) { for (const k of Object.keys(z.over)) if (!S.groups[k]) delete z.over[k]; }
+
+  // ---------- layer list (Layers mode) ----------
+  function renderLayerList() {
+    const box = $('layerList'); box.hidden = S.mode !== 'layers'; box.innerHTML = '';
+    if (S.mode !== 'layers') return;
+    box.style.marginTop = 'var(--space-2)';
+    if (S.main) {
+      const row = document.createElement('div'); row.className = 'part';
+      row.className = 'piece'; row.innerHTML = '<canvas class="thumb" width="88" height="88"></canvas><div style="display:grid;gap:4px;min-width:0"><span class="nm"></span><span class="hint"><b>Finished design</b> · used as the reference</span></div><button type="button">Remove</button>';
+      row.querySelector('.nm').textContent = S.mainName || 'finished design';
+      { const tc = row.querySelector('canvas'), tx = tc.getContext('2d'), k = Math.min(88 / S.main.width, 88 / S.main.height); tx.drawImage(S.main, (88 - S.main.width * k) / 2, (88 - S.main.height * k) / 2, S.main.width * k, S.main.height * k); }
+      row.querySelector('button').onclick = () => { S.main = null; S.layers.forEach(l => { delete l.found; }); const el = document.querySelector('.drop[data-slot=main]'); if (el) el.classList.remove('done'); rebuildAll(false); };
+      box.appendChild(row);
+    }
+    for (const l of S.layers) {
+      const row = document.createElement('div'); row.className = 'piece';
+      row.innerHTML = `<canvas class="thumb" width="88" height="88"></canvas><div style="display:grid;gap:4px;min-width:0"><span class="nm"></span><span class="q"><label class="hint" style="font-weight:600">What is this?</label><select aria-label="What is this piece?"></select><span class="guess"></span></span></div><button type="button">Remove</button>`;
+      row.querySelector('.nm').textContent = l.name;
+      { const tc = row.querySelector('canvas'), tx = tc.getContext('2d'), k = Math.min(88 / l.bmp.width, 88 / l.bmp.height); tx.imageSmoothingQuality = 'high'; tx.drawImage(l.bmp, (88 - l.bmp.width * k) / 2, (88 - l.bmp.height * k) / 2, l.bmp.width * k, l.bmp.height * k); }
+      row.querySelector('.guess').textContent = l.guessed ? 'guessed from the file name' : (l.role === 'other' ? 'not recognised: please choose' : '');
+      if (!l.guessed && l.role === 'other') row.querySelector('.guess').style.color = 'var(--warn)';
+      const sel = row.querySelector('select');
+      for (const [v, t] of [['background', 'Background'], ...ROLES, ['main', 'Main design (finished)']]) sel.add(new Option(t, v));
+      sel.value = l.role;
+      sel.onchange = () => { l.guessed = false; if (sel.value === 'main') { setMain(l.bmp, l.name); S.layers = S.layers.filter(o => o !== l); S.layers.forEach(o => { delete o.found; }); rebuildAll(true); return; } if (sel.value === 'background') S.layers.forEach(o => { if (o !== l && o.role === 'background') o.role = 'other'; }); l.role = sel.value; rebuildAll(false); };
+      row.querySelector('button').onclick = () => { S.layers = S.layers.filter(o => o !== l); rebuildAll(false); };
+      box.appendChild(row);
+    }
+    const add = document.createElement('button'); add.type = 'button'; add.textContent = 'Add more pieces'; add.style.justifySelf = 'start';
+    add.onclick = () => { pick = 'layers'; $('file').multiple = true; $('file').click(); };
+    box.appendChild(add);
+  }
+
+  // ---------- tagging (flat modes) ----------
+  function renderTools() {
+    const t = $('tools'); t.innerHTML = '';
+    const list = S.mode === 'layers' ? [] : ROLES;
+    t.hidden = S.mode === 'layers';
+    for (const [id, label] of list) {
+      const n = id === 'subject' ? (S.subject ? 1 : 0) : S.parts.filter(p => p.role === id).length;
+      const b = document.createElement('button'); b.type = 'button';
+      b.textContent = label + (n ? (n > 1 ? ` ×${n}` : ' ✓') : '');
+      b.setAttribute('aria-pressed', String(S.tool === id));
+      b.onclick = () => { S.tool = id; renderTools(); };
+      t.appendChild(b);
+    }
+
+    const cov = Object.entries(S.parts.reduce((a, p) => (a[p.role] = (a[p.role] || 0) + 1, a), {})).map(([r, n]) => NAME[r] + (n > 1 ? ` ×${n}` : ''));
+    $('coverage').innerHTML = cov.length ? `<b>Pieces:</b> ${cov.join(', ')}. All ${S.parts.length} go into every size.`
+      : (S.mode === 'layers' ? 'Assign roles to your layers.' : 'No parts tagged yet: pick a role above the image and drag a box around it.');
+    if (S.mode === 'layers') {
+      const mi = S.mainInfo, msg = [];
+      if (!S.main) msg.push('<b>Tip:</b> add the finished <b>Main design</b> so the tool can place every element exactly and match the original look.');
+      else if (!mainUsable()) msg.push('<b>Main design</b> has a different shape from the background, so it is used for reference only.');
+      else if (mi) {
+        if (mi.located) msg.push(`${mi.located} element${mi.located > 1 ? 's' : ''} placed using the main design.`);
+        if (mi.unplaced.length) msg.push(`<b>Couldn't find in the main design:</b> ${mi.unplaced.map(esc).join(', ')}.`);
+        msg.push(mi.darken ? `Matched to main design: darken ${mi.darken}%.` : 'Background brightness matches the main design.');
+        if (S.missing.length) msg.push(`<b style="color:var(--warn)">${S.missing.length} area${S.missing.length > 1 ? 's' : ''} in the main design ${S.missing.length > 1 ? "aren't" : "isn't"} in your layers</b> (red box${S.missing.length > 1 ? 'es' : ''} on the preview). Export that element as a PNG and add it.`);
+        if (mi.effect) msg.push('The main design has an overall effect (e.g. a gradient or texture) that your background doesn\'t have. Same-shape sizes use the main design as-is, so they keep it.');
+      }
+      if (msg.length) $('coverage').innerHTML += '<br>' + msg.join(' ');
+    }
+  }
+  function renderParts() {
+    const box = $('parts'); box.innerHTML = '';
+    if (S.mode === 'layers') return;
+    const count = {};
+    for (const p of S.parts) {
+      count[p.role] = (count[p.role] || 0) + 1;
+      const row = document.createElement('div'); row.className = 'part';
+      row.innerHTML = `<span class="mono"></span><button type="button">Remove</button>
+        <span class="ctl" style="grid-column:1/-1">
+          <select aria-label="Role"></select>
+          <select aria-label="Cut-out"><option value="light">Light text on photo</option><option value="dark">Dark text on light</option><option value="flat">Flat colour background</option><option value="box">Keep as box</option></select>
+          <label class="chip hint">Strength <input type="range" min="0" max="100"></label>
+        </span>`;
+      row.querySelector('.mono').textContent = `${NAME[p.role]} ${count[p.role]} · ${Math.round(p.box.w)}×${Math.round(p.box.h)}`;
+      const [rs, cs] = row.querySelectorAll('select'), rg = row.querySelector('input[type=range]');
+      for (const [v, t] of ROLES) rs.add(new Option(t, v));
+      rs.value = p.role; cs.value = p.cut; rg.value = p.strength; rg.disabled = p.cut === 'box';
+      rs.onchange = () => { p.role = rs.value; partsChanged(); };
+      cs.onchange = () => { p.cut = cs.value; rg.disabled = p.cut === 'box'; extract(p); partsChanged(); };
+      let t; rg.oninput = () => { p.strength = +rg.value; clearTimeout(t); t = setTimeout(() => { extract(p); partsChanged(); }, 200); };
+      row.querySelector('button').onclick = () => { S.parts = S.parts.filter(o => o !== p); partsChanged(); };
+      box.appendChild(row);
+    }
+  }
+
+  let srcK = 1, drag = null;
+  function drawSource(temp) {
+    const c = $('src'), maxW = Math.min(460, c.parentElement.clientWidth - 16), maxH = 460;
+    srcK = Math.min(maxW / S.W0, maxH / S.H0);
+    c.width = Math.round(S.W0 * srcK); c.height = Math.round(S.H0 * srcK);
+    const x = c.getContext('2d'), acc = cssVar('--accent', '#c2410c');
+    if (S.showLeft || S.mode === 'layers') x.drawImage(S.plate, 0, 0, c.width, c.height); else x.drawImage(S.flat, 0, 0, c.width, c.height);
+    if (S.mode === 'layers' && !S.showLeft && mainUsable()) x.drawImage(S.main, 0, 0, c.width, c.height);
+    else if (S.mode === 'layers' && !S.showLeft) for (const k of DRAW) { const g = S.groups[k]; if (!g || !g.pos) continue; for (const m of g.members) x.drawImage(m.canvas, m.box.x * srcK, m.box.y * srcK, m.box.w * srcK, m.box.h * srcK); }
+    x.font = '600 11px system-ui, sans-serif'; x.lineWidth = 2;
+    const label = (b, text, dashed) => {
+      const X = b.x * srcK, Y = b.y * srcK, W = b.w * srcK, H = b.h * srcK;
+      x.save(); if (dashed) x.setLineDash([6, 4]);
+      x.strokeStyle = '#ffffff'; x.strokeRect(X - 1, Y - 1, W + 2, H + 2); x.strokeStyle = acc; x.strokeRect(X, Y, W, H); x.restore();
+      const tw = x.measureText(text).width + 8; x.fillStyle = acc; x.fillRect(X, Math.max(0, Y - 16), tw, 16);
+      x.fillStyle = cssVar('--on-accent', '#fff'); x.fillText(text, X + 4, Math.max(0, Y - 16) + 12);
+    };
+    if (S.mode !== 'layers' && !S.showLeft) { const n = {}; for (const p of S.parts) { n[p.role] = (n[p.role] || 0) + 1; label(p.box, `${NAME[p.role]} ${n[p.role]}`); } }
+    if (S.subject) label(S.subject, S.subjectAuto ? 'Keep in view (auto)' : 'Keep in view', true);
+    for (const b of S.missing) { x.save(); x.setLineDash([5, 3]); x.lineWidth = 2; x.strokeStyle = '#e11d48'; x.strokeRect(b.x * srcK, b.y * srcK, b.w * srcK, b.h * srcK); x.restore(); }
+    if (temp) label(temp, NAME[S.tool], S.tool === 'subject');
+  }
+  function srcPt(e) { const r = $('src').getBoundingClientRect(); return { x: clamp((e.clientX - r.left) / r.width, 0, 1) * S.W0, y: clamp((e.clientY - r.top) / r.height, 0, 1) * S.H0 }; }
+  const boxOf = (a, b) => { const x = Math.round(Math.min(a.x, b.x)), y = Math.round(Math.min(a.y, b.y)); return { x, y, w: Math.round(Math.max(a.x, b.x)) - x, h: Math.round(Math.max(a.y, b.y)) - y }; };
+  $('src').addEventListener('pointerdown', (e) => { drag = { a: srcPt(e) }; try { $('src').setPointerCapture(e.pointerId); } catch (_) {} });
+  $('src').addEventListener('pointermove', (e) => { if (drag) drawSource(boxOf(drag.a, srcPt(e))); });
+  $('src').addEventListener('pointerup', (e) => {
+    if (!drag) return; const b = boxOf(drag.a, srcPt(e)); drag = null;
+    if (b.w * srcK < 6 || b.h * srcK < 6) { drawSource(); return; }
+    if (S.tool === 'subject') { S.subject = b; S.subjectAuto = false; S.keepSkipped = false; if (S.mode !== 'layers') S.tool = 'headline'; S.sizes.forEach(z => { z.cx = z.cy = null; }); partsChanged(); return; }
+    if (S.mode === 'layers') return;
+    const p = { id: S.nextId++, role: S.tool, box: b, strength: 50, pos: true };
+    stats(p); p.cut = p.role === 'product' ? 'box' : guessCut(p); extract(p);
+    S.parts.push(p); partsChanged();
+  });
+  $('showLeft').onchange = (e) => { S.showLeft = e.target.checked; drawSource(); };
+
+  // ---------- drawing helpers ----------
+  const MIPS = new WeakMap();
+  function mip(src, w, h) { // smallest pre-halved copy still ≥ target, for clean downscales
+    let m = MIPS.get(src); if (!m) { m = [src]; MIPS.set(src, m); }
+    for (let i = 0; ; i++) {
+      const cur = m[i]; if (cur.width / 2 < w || cur.height / 2 < h || cur.width < 4) return cur;
+      if (!m[i + 1]) { const n = mk(Math.ceil(cur.width / 2), Math.ceil(cur.height / 2)), nx = n.getContext('2d'); nx.imageSmoothingQuality = 'high'; nx.drawImage(cur, 0, 0, n.width, n.height); m.push(n); }
+    }
+  }
+  function drawPart(ctx, src, sx, sy, sw, sh, dx, dy, dw, dh) {
+    const lvl = mip(src, src.width * dw / sw, src.height * dh / sh), f = lvl.width / src.width;
+    ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(lvl, sx * f, sy * f, sw * f, sh * f, dx, dy, dw, dh);
+  }
+
+  // ---------- layout engine ----------
+  function safeRect(z) {
+    const s = z.safe;
+    return { x: z.w * s[3], y: z.h * s[0], w: z.w * (1 - s[1] - s[3]), h: z.h * (1 - s[0] - s[2]) };
+  }
+  const sameRatio = (z) => Math.abs(z.w / z.h - S.W0 / S.H0) < .012;
+  function kindOf(z) { const r = z.w / z.h; return z.rules.has('logo-only') ? 'logo' : sameRatio(z) ? 'orig' : r >= 5 ? 'strip' : r >= 1.5 ? 'wide' : r <= .75 ? 'tall' : 'stack'; }
+  const overlaps = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+  function outsideSafe(z, q) {
+    const R = safeRect(z);
+    return q.x < R.x - 1 || q.y < R.y - 1 || q.x + q.w > R.x + R.w + 1 || q.y + q.h > R.y + R.h + 1 || (z.keep && overlaps(q, z.keep));
+  }
+  let CAP = Infinity; // parts never grow more than 20% past their size in the original, relative to canvas width
+  const sc = (k) => S.scale[k] || 1; // global part scale from the Part sizes panel
+  function fitG(k, slot, align) {
+    const b = S.groups[k].b, s = Math.min(slot.w / b.w, slot.h / b.h, CAP * sc(k)), w = b.w * s, h = b.h * s;
+    const x = align === 'left' ? slot.x : align === 'right' ? slot.x + slot.w - w : slot.x + (slot.w - w) / 2;
+    return { x, y: slot.y + (slot.h - h) / 2, w, h };
+  }
+  const MAXW = { logo: .42, headline: 1, subhead: .92, other: .8, other2: .6, other3: .6, other4: .6, other5: .6, other6: .6, product: 1, cta: .55, badge: .3 };
+  function rowsInto(rows, R, out) { // rows: [{wt, items:[[key, share, align]]}]
+    if (!rows.length) return;
+    const gap = Math.min(R.w, R.h) * .035, tot = rows.reduce((a, r) => a + r.wt, 0), avail = R.h - gap * (rows.length - 1);
+    let y = R.y;
+    for (const r of rows) {
+      const h = avail * r.wt / tot;
+      if (r.items.length === 1) { const [k] = r.items[0], w = R.w * Math.min(1, MAXW[k] * sc(k)); out[k] = fitG(k, { x: R.x + (R.w - w) / 2, y, w, h }, 'center'); }
+      else { let x = R.x; const g2 = R.w * .06, aw = R.w - g2 * (r.items.length - 1), st = r.items.reduce((a, [q, sh]) => a + sh * sc(q), 0); for (const [k, share, al] of r.items) { const w = aw * share * sc(k) / st; out[k] = fitG(k, { x, y, w, h }, al); x += w + g2; } }
+      y += h + gap;
+    }
+  }
+  function bottomRow(has) {
+    const b = ['cta', 'badge'].filter(has);
+    if (b.length === 2) return { wt: .17 * Math.max(sc('cta'), sc('badge')), items: [['cta', .62, 'right'], ['badge', .38, 'left']] }; // designers keep button + badge together as one pair
+    return b.length ? { wt: .15 * sc(b[0]), items: [[b[0]]] } : null;
+  }
+  function autoLayout(z) {
+    const R = safeRect(z), kind = kindOf(z), has = (k) => S.groups[k] && !z.hide[k], out = {};
+    CAP = 1.2 * z.w / S.W0;
+    if (kind === 'logo') {
+      CAP = Infinity; const f = sc('logo'), w = Math.min(z.w * .9, R.w * f), h = Math.min(z.h * .84, R.h * f);
+      if (has('logo')) out.logo = fitG('logo', { x: (z.w - w) / 2, y: (z.h - h) / 2, w, h }, 'center'); CAP = 1; return out;
+    }
+    // photo panel + colour: all parts go in the colour area left of the photo panel
+    const sp = bgFit(z) === 'split' ? splitGeom(z) : null;
+    const RT = !sp ? R : sp.vertical ? { x: R.x, y: R.y, w: R.w, h: Math.max(10, Math.min(R.y + R.h, sp.y) - R.y - z.h * .02) } : { x: R.x, y: R.y, w: Math.max(10, sp.x - R.x - z.w * .02), h: R.h };
+    z._layoutUsed = null; z._deco = null; z._bleedOK = null;
+    { const dm = designerMode(z); if (dm) { const L = layoutDesigner(z, has, dm, false); if (L) return L; } }
+    if (z.layout === 'gradient' && S.groups.headline && has('headline')) { const L = layoutDesigner(z, has, 'tall', true); if (L) { z._layoutUsed = 'gradient'; return L; } }
+    if (!sp && kind !== 'strip' && kind !== 'orig' && (z.layout || 'auto') !== 'template') {
+      const mode = z.layout || 'auto';
+      const L = (mode === 'auto' || mode === 'original') && layoutOriginal(z, has) || (mode === 'auto' || mode === 'beside') && layoutBeside(z, has);
+      if (L) return L;
+      if (mode !== 'auto') z._layoutUsed = 'fallback';
+    }
+    if (kind === 'strip') {
+      const cells = [['logo', .16 * sc('logo')], ['product', .12 * sc('product')], ['__text', .48 * Math.max(sc('headline'), sc('subhead'))], ['badge', .1 * sc('badge')], ['cta', .2 * sc('cta')]]
+        .filter(([k]) => k === '__text' ? ['headline', 'subhead', 'other'].some(has) : has(k));
+      const gap = RT.h * .3, tot = cells.reduce((a, c) => a + c[1], 0), avail = RT.w - gap * (cells.length - 1);
+      let x = RT.x;
+      for (const [k, wt] of cells) {
+        const w = avail * wt / tot, slot = { x, y: RT.y, w, h: RT.h };
+        if (k === '__text') {
+          const t = ['headline', 'subhead', 'other'].filter(has), tw = { headline: .62 * sc('headline'), subhead: .38 * sc('subhead'), other: .3 * sc('other') };
+          const tt = t.reduce((a, q) => a + tw[q], 0); let y = R.y;
+          for (const q of t) { const h = R.h * tw[q] / tt; out[q] = fitG(q, { x, y, w, h }, 'center'); y += h; }
+        } else out[k] = fitG(k, slot, 'center');
+        x += w + gap;
+      }
+      return out;
+    }
+    const textRows = [];
+    if (has('logo')) textRows.push({ wt: .14 * sc('logo'), items: [['logo']] });
+    if (has('headline')) textRows.push({ wt: .34 * sc('headline'), items: [['headline']] });
+    if (has('subhead')) textRows.push({ wt: .13 * sc('subhead'), items: [['subhead']] });
+    if (has('other')) textRows.push({ wt: .1 * sc('other'), items: [['other']] });
+    const br = bottomRow(has);
+    if (kind === 'wide' && sp) {
+      if (has('product')) out.product = fitG('product', { x: sp.x, y: R.y, w: Math.min(sp.w, R.x + R.w - sp.x), h: R.h }, 'center');
+      rowsInto(br ? [...textRows, br] : textRows, RT, out);
+      return out;
+    }
+    if (kind === 'wide') {
+      const prod = has('product'), split = prod ? clamp(.42 * sc('product'), .25, .62) : .52, gap = R.w * .04;
+      const textR = prod ? { x: R.x + R.w * split + gap, y: R.y, w: R.w * (1 - split) - gap, h: R.h } : { x: R.x, y: R.y, w: R.w * split, h: R.h };
+      if (prod) out.product = fitG('product', { x: R.x, y: R.y, w: R.w * split, h: R.h }, 'center');
+      rowsInto(br ? [...textRows, br] : textRows, textR, out);
+      return out;
+    }
+    const rows = [...textRows];
+    if (has('product')) rows.push({ wt: (kind === 'tall' ? .4 : .32) * sc('product'), items: [['product']] });
+    if (br) rows.push(br);
+    rowsInto(rows, RT, out);
+    return out;
+  }
+  // ---------- design-aware layouts ----------
+  function subjOnCanvas(z) { // the Keep-in-view box where it lands in this size, or null
+    const sb = S.subject; if (!sb) return null;
+    const f = bgFit(z); let x, y, w, h;
+    if (f === 'mirror' || f === 'soft') { const P = ext(z); x = P.px + sb.x * P.s; y = P.py + sb.y * P.s; w = sb.w * P.s; h = sb.h * P.s; }
+    else if (f === 'fill') { const c = crop(z); x = (sb.x - c.sx) * c.s; y = (sb.y - c.sy) * c.s; w = sb.w * c.s; h = sb.h * c.s; }
+    else return null;
+    const x0 = Math.max(0, x), y0 = Math.max(0, y), x1 = Math.min(z.w, x + w), y1 = Math.min(z.h, y + h);
+    return x1 > x0 && y1 > y0 ? { x: x0, y: y0, w: x1 - x0, h: y1 - y0 } : null;
+  }
+  const area = (q) => Math.max(0, q.w) * Math.max(0, q.h);
+  const inter = (a, b) => area({ x: Math.max(a.x, b.x), y: Math.max(a.y, b.y), w: Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x), h: Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y) });
+  function fitsAroundSubject(z) { // can the pieces sit on the full photo without covering the subject?
+    const key = [z.ver, z.zoom, z.cx, z.cy, JSON.stringify(S.scale), S.subject && S.subject.x, z.layout].join('|');
+    if (z._fitKey === key) return z._fitVal;
+    z._probe = true;
+    try { const has = (k) => S.groups[k] && !z.hide[k]; CAP = 1.2 * z.w / S.W0; z._fitVal = !!((z.layout || 'auto') !== 'beside' && layoutOriginal(z, has) || (z.layout || 'auto') !== 'original' && layoutBeside(z, has)); }
+    finally { z._probe = false; }
+    z._fitKey = key; return z._fitVal;
+  }
+  // ---------- designer layouts for shapes far from the original (learned from the team's manual resizes) ----------
+  function designerMode(z) {
+    if (!S.W0 || !S.groups || kindOf(z) === 'logo' || (z.layout && z.layout !== 'auto')) return null;
+    if (!S.groups.headline || !Object.values(S.groups).some(g => g.pos)) return null;
+    const rel = (z.w / z.h) / (S.W0 / S.H0);
+    if (rel <= .66) return 'tall';
+    if (rel >= 1.5) return z.w / z.h > 2.6 ? 'banner' : 'wide';
+    return null;
+  }
+  function inkOf(k) { // where the lettering sits inside a group (0-1), and the flat panel colour behind it, if any
+    const g = S.groups[k]; if (!g) return null; if (g.ink) return g.ink;
+    const W = 240, H = Math.max(1, Math.round(240 * g.b.h / g.b.w)), c = mk(W, H), x = c.getContext('2d', { willReadFrequently: true }), s = W / g.b.w;
+    for (const m of g.members) { const r = relOf(g, m); x.drawImage(m.canvas, r.x * s, r.y * s, m.box.w * s, m.box.h * s); }
+    const d = x.getImageData(0, 0, W, H).data, bins = new Map(), q = (i) => (d[i] >> 4) << 8 | (d[i + 1] >> 4) << 4 | (d[i + 2] >> 4); let opaque = 0;
+    for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 200) { opaque++; const kk = q(i); bins.set(kk, (bins.get(kk) || 0) + 1); }
+    let top = null, cnt = 0; for (const [kk, v] of bins) if (v > cnt) { cnt = v; top = kk; }
+    let panel = null; const acc = [0, 0, 0, 0];
+    if (top != null && cnt > opaque * .45 && opaque > W * H * .6) for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 200 && q(i) === top) { acc[0] += d[i]; acc[1] += d[i + 1]; acc[2] += d[i + 2]; acc[3]++; }
+    if (acc[3]) panel = [acc[0] / acc[3], acc[1] / acc[3], acc[2] / acc[3]];
+    let x0 = W, y0 = H, x1 = -1, y1 = -1;
+    for (let y = 0; y < H; y++) for (let X = 0; X < W; X++) {
+      const i = (y * W + X) * 4; if (d[i + 3] < 100) continue;
+      if (panel && Math.abs(d[i] - panel[0]) + Math.abs(d[i + 1] - panel[1]) + Math.abs(d[i + 2] - panel[2]) < 90) continue;
+      if (X < x0) x0 = X; if (X > x1) x1 = X; if (y < y0) y0 = y; if (y > y1) y1 = y;
+    }
+    if (x1 < 0) { x0 = 0; y0 = 0; x1 = W - 1; y1 = H - 1; panel = null; }
+    return (g.ink = { x0: x0 / W, y0: y0 / H, x1: (x1 + 1) / W, y1: (y1 + 1) / H, panel: panel && `rgb(${panel.map(Math.round).join(',')})` });
+  }
+  function layoutDesigner(z, has, mode, withFade) {
+    const H = 'headline'; if (!has(H)) return null;
+    const R = safeRect(z), out = {}, deco = { ext: [], fade: null }, okBleed = new Set(), gb = (k) => S.groups[k].b, hi = inkOf(H), inkW = hi.x1 - hi.x0;
+    const rel = (k) => gb(k).w / gb(H).w, bl = bleedOf(H), bleeds = bl.l || bl.r, aspect = (k) => gb(k).h / gb(k).w, gap = Math.min(z.w, z.h) * .04;
+    if (mode === 'tall') {
+      let w = R.w / inkW, h = w * aspect(H); if (h > z.h * .2) { h = z.h * .2; w = h / aspect(H); }
+      w *= sc(H); if (w * inkW > R.w) w = R.w / inkW; h = w * aspect(H); // the size slider never pushes the lettering past the safe zone
+      const cw = has('cta') ? w * rel('cta') * sc('cta') : 0, ch = cw * (has('cta') ? aspect('cta') : 0);
+      const cta = has('cta') ? { x: z.w / 2 - cw / 2, y: R.y + R.h - ch, w: cw, h: ch } : null;
+      const hl = { x: z.w / 2 - (hi.x0 + inkW / 2) * w, y: (cta ? cta.y - gap * .6 : R.y + R.h) - h, w, h };
+      out[H] = hl; if (cta) out.cta = cta;
+      if (z.keep) { const lift = Math.max(0, ...Object.values(out).filter(q => overlaps(q, z.keep)).map(q => q.y + q.h - (z.keep.y - 6))); for (const q of Object.values(out)) q.y -= lift; }
+      if (has('logo')) { const lw = Math.max(w * rel('logo'), R.w * .26) * sc('logo'); out.logo = { x: R.x, y: R.y, w: lw, h: lw * aspect('logo') }; }
+      const fc = hi.panel || 'rgb(0,0,0)'; // 'Text on gradient' layout: the headline's own panel colour, no picker
+      if (withFade) deco.fade = { y: Math.max(0, hl.y - z.h * .16), c: fc };
+      if (bleeds && hi.panel) { if (hl.x > 0) deco.ext.push({ x: 0, y: hl.y, w: hl.x + 1, h: hl.h, c: hi.panel }); if (hl.x + hl.w < z.w) deco.ext.push({ x: hl.x + hl.w - 1, y: hl.y, w: z.w - hl.x - hl.w + 1, h: hl.h, c: hi.panel }); }
+      okBleed.add(H);
+    } else {
+      const colR = z.w * (mode === 'wide' ? .6 : .56), maxH = mode === 'wide' ? .3 : z.w / z.h > 6 ? .78 : .62;
+      let w = (colR - R.x) / inkW, h = w * aspect(H); if (h > z.h * maxH) { h = z.h * maxH; w = h / aspect(H); }
+      const Fc = faceOnCanvas(z); // the headline panel stops short of the face (before the size slider, so the slider still works)
+      if (Fc) { const maxRight = Fc.x - gap * .5; if (R.x - hi.x0 * w + w > maxRight && maxRight > R.x + z.w * .2) { w = (maxRight - R.x) / (1 - hi.x0); h = w * aspect(H); } }
+      w *= sc(H); if (w * inkW > R.w) w = R.w / inkW; if (w * aspect(H) > R.h) w = R.h / aspect(H); h = w * aspect(H);
+      const hx = R.x - hi.x0 * w;
+      if (mode === 'wide') { // logo top-left, headline, button under it: one left column
+        let lw = has('logo') ? w * rel('logo') * sc('logo') : 0, cw = has('cta') ? w * rel('cta') * sc('cta') : 0;
+        const need = lw * (lw ? aspect('logo') : 0) + h + cw * (cw ? aspect('cta') : 0) + gap * 2;
+        if (need > R.h) { const f = R.h / need; w *= f; h *= f; lw *= f; cw *= f; }
+        const x0 = R.x - hi.x0 * w;
+        if (cw) out.cta = { x: R.x, y: R.y + R.h - cw * aspect('cta'), w: cw, h: cw * aspect('cta') };
+        out[H] = { x: x0, y: (out.cta ? out.cta.y - gap * .8 : R.y + (R.h + (lw ? lw * aspect('logo') : 0) - h) / 2) - (out.cta ? h : 0), w, h };
+        if (lw) out.logo = { x: R.x, y: R.y, w: lw, h: lw * aspect('logo') };
+      } else { // banners: headline left, logo top-right, button bottom-right
+        out[H] = { x: hx, y: R.y + (R.h - h) / 2, w, h };
+        let lw = has('logo') ? z.w * .13 * sc('logo') : 0, cw = has('cta') ? z.w * .2 * sc('cta') : 0;
+        const need = (lw ? lw * aspect('logo') : 0) + (cw ? cw * aspect('cta') : 0) + (lw && cw ? gap * .5 : 0);
+        if (need > R.h) { const f = R.h / need; lw *= f; cw *= f; }
+        if (lw) out.logo = { x: R.x + R.w - lw, y: R.y, w: lw, h: lw * aspect('logo') };
+        if (cw) out.cta = { x: R.x + R.w - cw, y: R.y + R.h - cw * aspect('cta'), w: cw, h: cw * aspect('cta') };
+      }
+      const hl = out[H];
+      if (bleeds && hi.panel && hl.x > 0) deco.ext.push({ x: 0, y: hl.y, w: hl.x + 1, h: hl.h, c: hi.panel });
+      okBleed.add(H);
+    }
+    z._deco = deco; z._bleedOK = okBleed; z._layoutUsed = 'designer-' + mode;
+    return out;
+  }
+  function faceOnCanvas(z) { // the detected face where it lands in this size, or null
+    const f = S.subject && S.subject.face; if (!f || bgFit(z) !== 'fill') return null; const c = crop(z);
+    return { x: (f.x - c.sx) * c.s, y: (f.y - c.sy) * c.s, w: f.w * c.s, h: f.h * c.s };
+  }
+  // pieces that sat over the subject in the original may do so again (designers put banners over a body); the face stays clear
+  const overSubject = (k) => { const g = S.groups[k], sb = S.subject; return !!(g && g.pos && sb && inter(g.b, sb) > area(g.b) * .1); };
+  const bleedOf = (k) => { const b = S.groups[k].b, e = 2; return { l: b.x <= e, r: b.x + b.w >= S.W0 - e, t: b.y <= e, b: b.y + b.h >= S.H0 - e }; };
+  function layoutOriginal(z, has) { // keep each piece where it sat in the original (relative position), then resolve clashes
+    const keys = Object.keys(S.groups).filter(k => has(k)); if (!keys.length || keys.some(k => !S.groups[k].pos)) return null;
+    const fx = z.w / S.W0, fy = z.h / S.H0;
+    if (Math.min(fx, fy) / Math.max(fx, fy) < .55) return null; // shape too different (wide banners): use a text column instead of shrinking the original
+    const R = safeRect(z), Sb = subjOnCanvas(z), Fc = faceOnCanvas(z), base = Math.min(fx, fy);
+    const clash = (k, q) => overSubject(k) ? !!(Fc && inter(q, Fc) > area(Fc) * .04) : !!(Sb && inter(q, Sb) > area(q) * .1);
+    for (const grow of [1, 1.1, .9, .8, .7]) {
+      const out = {};
+      for (const k of keys) {
+        const b = scaledB(k), s = Math.min(base * grow, CAP * sc(k) * 1.4), w = b.w * s, h = b.h * s;
+        const u = (b.x + b.w / 2) / S.W0, v = (b.y + b.h / 2) / S.H0, bl = bleedOf(k);
+        let x = clamp(R.x + u * R.w - w / 2, R.x, R.x + R.w - w);
+        if (bl.r && !bl.l) x = z.w - w; else if (bl.l && !bl.r) x = 0; // a piece that ran off the edge keeps running off it
+        out[k] = { x, y: clamp(R.y + v * R.h - h / 2, R.y, R.y + R.h - h), w, h };
+      }
+      if (keys.some(k => out[k].w > z.w + 1 || out[k].h > R.h + 1)) continue;
+      // pieces off the subject (or off the face, for pieces that sat over the subject): move to the nearest free side
+      if (Sb || Fc) for (const k of keys) {
+        const q = out[k]; if (!clash(k, q)) continue;
+        const T = overSubject(k) ? Fc : Sb;
+        const opts = [{ ...q, x: T.x - q.w - 6 }, { ...q, x: T.x + T.w + 6 }, { ...q, y: T.y - q.h - 6 }, { ...q, y: T.y + T.h + 6 }]
+          .filter(o => o.x >= Math.min(R.x, q.x) - .5 && o.y >= R.y - .5 && o.x + o.w <= Math.max(R.x + R.w, q.x + q.w) + .5 && o.y + o.h <= R.y + R.h + .5)
+          .sort((a, b) => Math.hypot(a.x - q.x, a.y - q.y) - Math.hypot(b.x - q.x, b.y - q.y));
+        if (opts[0]) out[k] = opts[0];
+      }
+      // app UI keep-out (Story reply bar): lift pieces above it before resolving overlaps
+      if (z.keep) for (const k of keys) if (overlaps(out[k], z.keep)) out[k].y = Math.max(R.y, z.keep.y - out[k].h - 6);
+      // pieces off each other: push apart vertically (keeps the original's reading order), a few passes
+      const order = keys.slice().sort((a, b) => out[a].y - out[b].y), bottomFor = (q) => z.keep && q.x + q.w > z.keep.x ? Math.min(R.y + R.h, z.keep.y) : R.y + R.h;
+      for (let pass = 0; pass < 6; pass++) for (let i = 0; i < order.length; i++) for (let j = i + 1; j < order.length; j++) {
+        const a = out[order[i]], b = out[order[j]]; if (!overlaps(a, b)) continue;
+        const down = a.y + a.h + 6 - b.y; if (b.y + down + b.h <= bottomFor(b)) b.y += down; else a.y = Math.max(R.y, b.y - a.h - 6);
+      }
+      if (z.keep && keys.some(k => overlaps(out[k], z.keep))) continue;
+      const inSafe = (k) => { const q = out[k], bl = bleedOf(k); return q.y >= R.y - .5 && q.y + q.h <= R.y + R.h + .5 && (bl.l || q.x >= R.x - .5) && (bl.r || q.x + q.w <= R.x + R.w + .5); };
+      const ok = keys.every(k => inSafe(k) && !clash(k, out[k])) && keys.every((k, i) => keys.slice(i + 1).every(m => !overlaps(out[k], out[m])));
+      if (ok) { z._layoutUsed = 'original'; return out; }
+    }
+    return null;
+  }
+  function layoutBeside(z, has) { // all text in the biggest free area beside the subject
+    const Sb = subjOnCanvas(z); if (!Sb) return null;
+    const R = safeRect(z), g = Math.min(z.w, z.h) * .03;
+    const cand = [
+      { x: R.x, y: R.y, w: Sb.x - g - R.x, h: R.h, side: 'left' }, { x: Sb.x + Sb.w + g, y: R.y, w: R.x + R.w - (Sb.x + Sb.w + g), h: R.h, side: 'right' },
+      { x: R.x, y: R.y, w: R.w, h: Sb.y - g - R.y, side: 'top' }, { x: R.x, y: Sb.y + Sb.h + g, w: R.w, h: R.y + R.h - (Sb.y + Sb.h + g), side: 'bottom' }
+    ].filter(c => c.w >= R.w * .3 && c.h >= R.h * .22).sort((a, b) => area(b) - area(a));
+    if (!cand.length) return null;
+    const A = cand[0], out = {}, rows = [];
+    if (has('logo')) rows.push({ wt: .16 * sc('logo'), items: [['logo']] });
+    if (has('headline')) rows.push({ wt: .36 * sc('headline'), items: [['headline']] });
+    if (has('subhead')) rows.push({ wt: .14 * sc('subhead'), items: [['subhead']] });
+    if (has('other')) rows.push({ wt: .1 * sc('other'), items: [['other']] });
+    const br = bottomRow(has); if (br) rows.push(br);
+    if (has('product')) out.product = fitG('product', { x: Sb.x, y: Sb.y, w: Sb.w, h: Sb.h }, 'center');
+    rowsInto(rows, A, out);
+    z._layoutUsed = 'beside-' + A.side; return out;
+  }
+  function scaledB(k) { const b = S.groups[k].b, f = sc(k); return { x: b.x + b.w * (1 - f) / 2, y: b.y + b.h * (1 - f) / 2, w: b.w * f, h: b.h * f }; }
+  function rects(z) {
+    const kind = kindOf(z), auto = autoLayout(z), out = {}, s = z.w / S.W0, pending = [];
+    // same shape as the original: original layout, shrunk about the centre just enough to sit inside the safe zone
+    let fitO = null;
+    if (kind === 'orig') {
+      const ks = Object.keys(S.groups).filter(k => !z.hide[k] && S.groups[k].pos);
+      if (ks.length) {
+        const bs = ks.map(k => scaledB(k)), x0 = Math.min(...bs.map(b => b.x)) * s, y0 = Math.min(...bs.map(b => b.y)) * s;
+        const x1 = Math.max(...bs.map(b => b.x + b.w)) * s, y1 = Math.max(...bs.map(b => b.y + b.h)) * s, R = safeRect(z), cx = z.w / 2, cy = z.h / 2;
+        let f = 1;
+        if (x0 < R.x) f = Math.min(f, (cx - R.x) / (cx - x0)); if (x1 > R.x + R.w) f = Math.min(f, (R.x + R.w - cx) / (x1 - cx));
+        if (y0 < R.y) f = Math.min(f, (cy - R.y) / (cy - y0)); if (y1 > R.y + R.h) f = Math.min(f, (R.y + R.h - cy) / (y1 - cy));
+        fitO = { f: Math.max(.3, f), cx, cy };
+      }
+    }
+    for (const k in S.groups) {
+      if (z.hide[k]) continue;
+      const o = z.over[k], g = S.groups[k];
+      let q;
+      if (o) q = { x: o.x * z.w, y: o.y * z.h, w: o.w * z.w, h: o.h * z.h };
+      else if (kind === 'orig' && g.pos) { const f = fitO.f, b = scaledB(k); q = { x: fitO.cx + (b.x * s - fitO.cx) * f, y: fitO.cy + (b.y * s - fitO.cy) * f, w: b.w * s * f, h: b.h * s * f }; }
+      else if (!(kind === 'orig' && fitO)) q = auto[k]; // same-shape sizes: a piece with no place in the original gets a free spot below
+      if (!q) { if (kind !== 'logo') pending.push(k); continue; }
+      if (!o && z.keep && overlaps(q, z.keep)) { // step out of a UI keep-out (e.g. Story reply bar): move up, else left
+        const R = safeRect(z), left = { ...q, x: z.keep.x - q.w - 4 }, up = { ...q, y: z.keep.y - q.h - 4 };
+        q = up.y >= R.y ? up : left.x >= R.x ? left : q;
+      }
+      out[k] = q;
+    }
+    for (const k of pending) { // pieces this layout doesn't arrange (subhead, badge, decorations…): nearest free spot, clear of the rest
+      let q = findSpot(z, k, out);
+      if (!q && DECOS.includes(k) && !(z.over && z.over[k])) continue; // no free room: leave the decoration out of this size (the card says so)
+      if (!q) { const R = safeRect(z), g = S.groups[k], f = Math.min(z.w / S.W0, z.h / S.H0), b = scaledB(k), w = Math.min(R.w, b.w * f), h = w * g.b.h / g.b.w, u = g.pos ? (b.x + b.w / 2) / S.W0 : 1, v = g.pos ? (b.y + b.h / 2) / S.H0 : 0; q = { x: clamp(R.x + u * R.w - w / 2, R.x, Math.max(R.x, R.x + R.w - w)), y: clamp(R.y + v * R.h - h / 2, R.y, Math.max(R.y, R.y + R.h - h)), w, h }; }
+      out[k] = q;
+    }
+    return out;
+  }
+  function findSpot(z, k, placed) { // near the piece's original spot (top-right if it has none), inside the safe zone, clear of other pieces, the face and app UI
+    const R = safeRect(z), g = S.groups[k], b = scaledB(k), f = Math.min(z.w / S.W0, z.h / S.H0), Fc = faceOnCanvas(z);
+    const u = g.pos ? (b.x + b.w / 2) / S.W0 : 1, v = g.pos ? (b.y + b.h / 2) / S.H0 : 0;
+    const blockers = [...Object.values(placed), ...(Fc ? [Fc] : []), ...(z.keep ? [z.keep] : [])];
+    for (const sz of [1, .8, .65, .5]) {
+      let w = (g.pos ? b.w * f : Math.min(R.w * .16, R.h * .3 * g.b.w / g.b.h)) * sz, h = w * g.b.h / g.b.w;
+      if (w > R.w) { w = R.w; h = w * g.b.h / g.b.w; } if (h > R.h) { h = R.h; w = h * g.b.w / g.b.h; }
+      const tx = R.x + u * R.w - w / 2, ty = R.y + v * R.h - h / 2; let best = null;
+      for (let i = 0; i <= 16; i++) for (let j = 0; j <= 16; j++) {
+        const q = { x: R.x + (R.w - w) * i / 16, y: R.y + (R.h - h) * j / 16, w, h };
+        if (blockers.some(o => overlaps(q, o))) continue;
+        const d = Math.hypot(q.x - tx, q.y - ty); if (!best || d < best.d) best = { q, d };
+      }
+      if (best) return best.q;
+    }
+    return null;
+  }
+
+  // photo crop: always COVERS the canvas; keeps the Subject in frame
+  function crop(z) {
+    const cover = Math.max(z.w / S.W0, z.h / S.H0), s = cover * z.zoom, sw = z.w / s, sh = z.h / s;
+    let cx = S.W0 / 2, cy = S.H0 / 2;
+    const dm = designerMode(z), E = dm && S.fullRect ? S.fullRect : { x: 0, y: 0, w: S.W0, h: S.H0 }, face = S.subject && S.subject.face;
+    if (z.cx != null) { cx = z.cx * S.W0; cy = z.cy * S.H0; }
+    else if (dm && (face || S.subject)) { // designers' framing: face right of the text in wide sizes, in the upper part of tall ones
+      const t = face || S.subject, fx = t.x + t.w / 2, fy = t.y + t.h / 2;
+      const tx = dm === 'tall' ? .5 : dm === 'wide' ? .74 : .72, ty = dm === 'tall' ? .3 : .45;
+      cx = fx - (tx - .5) * sw; cy = fy - (ty - .5) * sh;
+    }
+    else if (S.subject) {
+      const sb = S.subject, scx = sb.x + sb.w / 2, scy = sb.y + sb.h / 2, kind = kindOf(z);
+      const tx = !z.centerSubject && kind === 'wide' && !(S.groups.product && !z.hide.product) ? .74 : .5;
+      cx = sb.w > sw * .9 ? scx : scx - (tx - .5) * sw;
+      cy = sb.h > sh * .9 ? sb.y + Math.max(sh * .5, sb.h * .3) : scy; // subject taller than the view: favour its top (faces)
+    }
+    cx = clamp(cx, E.x + sw / 2, E.x + E.w - sw / 2); cy = clamp(cy, E.y + sh / 2, E.y + E.h - sh / 2);
+    return { sx: cx - sw / 2, sy: cy - sh / 2, sw, sh, s, cx, cy, full: !!dm };
+  }
+  function sizeGradient(ctx, z, L, k) { // the per-size Gradient menu: a fade from one edge, or a soft band behind the text
+    const W = z.w * k, H = z.h * k, c = S.fadeColor || 'rgb(0,0,0)', rgba = (a) => c.replace('rgb(', 'rgba(').replace(')', ',' + a + ')');
+    ctx.save();
+    if (z.grad === 'band') {
+      const keys = Object.keys(L).filter(q => q !== 'product'); if (!keys.length) { ctx.restore(); return; }
+      const pad = Math.min(z.w, z.h) * .05, U = bbox(keys.map(q => L[q]));
+      ctx.fillStyle = rgba(.55); ctx.fillRect((U.x - pad) * k, (U.y - pad) * k, (U.w + 2 * pad) * k, (U.h + 2 * pad) * k);
+    } else {
+      const e = .6, g = z.grad === 'top' ? ctx.createLinearGradient(0, 0, 0, H * e) : z.grad === 'left' ? ctx.createLinearGradient(0, 0, W * e, 0) : z.grad === 'right' ? ctx.createLinearGradient(W, 0, W * (1 - e), 0) : ctx.createLinearGradient(0, H, 0, H * (1 - e));
+      g.addColorStop(0, rgba(.85)); g.addColorStop(.5, rgba(.5)); g.addColorStop(1, rgba(0)); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    }
+    ctx.restore();
+  }
+  function scrim(ctx, z, L, k) {
+    const kind = kindOf(z), mode = S.scrim; if (mode === 'off' || bgFit(z) === 'split') return; // split: text sits on solid colour
+    if (mode === 'auto' && kind !== 'wide' && kind !== 'strip') return;
+    const keys = Object.keys(L).filter(q => q !== 'product'); if (!keys.length) return;
+    const W = z.w * k, H = z.h * k, pad = Math.min(z.w, z.h) * .05;
+    const U = { x: Math.min(...keys.map(q => L[q].x)) - pad, y: Math.min(...keys.map(q => L[q].y)) - pad };
+    U.w = Math.max(...keys.map(q => L[q].x + L[q].w)) + pad - U.x; U.h = Math.max(...keys.map(q => L[q].y + L[q].h)) + pad - U.y;
+    ctx.save();
+    if (mode === 'band') { ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.fillRect(U.x * k, U.y * k, U.w * k, U.h * k); }
+    else if (kind === 'strip') { ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(0, 0, W, H); }
+    else if (kind === 'wide') {
+      const left = U.x + U.w / 2 < z.w / 2, g = ctx.createLinearGradient(left ? 0 : W, 0, left ? Math.min(W, (U.x + U.w + pad * 3) * k) : Math.max(0, (U.x - pad * 3) * k), 0);
+      g.addColorStop(0, 'rgba(0,0,0,.66)'); g.addColorStop(.6, 'rgba(0,0,0,.45)'); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    } else {
+      const g = ctx.createLinearGradient(0, (U.y - pad * 2) * k, 0, (U.y + U.h + pad * 2) * k);
+      g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(.2, 'rgba(0,0,0,.45)'); g.addColorStop(.8, 'rgba(0,0,0,.45)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = g; ctx.fillRect(0, (U.y - pad * 2) * k, W, (U.h + pad * 4) * k);
+    }
+    ctx.restore();
+  }
+  // ---------- photo fit: Fill (crop) or Extend (whole photo, sides filled) ----------
+  function ext(z) { // placement of the whole photo when its sides are extended
+    const s = (z.h / S.H0) * z.zoom, pw = S.W0 * s, ph = S.H0 * s, free = z.w - pw;
+    let px = free / 2, py = (z.h - ph) / 2;
+    if (z.epx != null) px = z.epx * free;
+    else if (S.subject) {
+      const sb = S.subject, kind = kindOf(z), tx = kind === 'wide' && !(S.groups.product && !z.hide.product) ? .74 : .5;
+      px = clamp(tx * z.w - (sb.x + sb.w / 2) * s, Math.min(0, free), Math.max(0, free));
+    }
+    if (z.epy != null) py = -z.epy * (ph - z.h);
+    else if (S.subject && ph > z.h) py = clamp(z.h / 2 - (S.subject.y + S.subject.h / 2) * s, z.h - ph, 0);
+    return { s, pw, ph, px, py, free };
+  }
+  function bgFit(z) {
+    if (kindOf(z) === 'logo') return 'fill';
+    let f = z.fit || 'auto';
+    if (f === 'custom' && !z.custom) f = 'auto';
+    if (f === 'custom') return f;
+    const free = z.w - S.W0 * (z.h / S.H0) * z.zoom;
+    if (f === 'auto') {
+      // designers keep the photo full-bleed in squares, portraits and stories (text may sit over it, as in the original);
+      // only banners much wider than the photo get the photo panel + colour
+      const cover = Math.max(z.w / S.W0, z.h / S.H0), kept = (z.w / cover) * (z.h / cover) / (S.W0 * S.H0), wideBanner = z.w / z.h > 2.2 && z.w / z.h > (S.W0 / S.H0) * 1.6;
+      f = kept < .4 && wideBanner ? 'split' : 'fill';
+      const placed = Object.values(S.groups).some(g => g.pos);
+      if (designerMode(z)) f = 'fill'; // designers keep the photo full-bleed and re-frame it
+      if (f === 'fill' && !placed && !z._probe && S.subject && kindOf(z) === 'wide' && (z.layout || 'auto') !== 'template' && !fitsAroundSubject(z)) f = 'split';
+    }
+    if (f === 'split') return f;
+    if ((f === 'mirror' || f === 'soft') && free <= 0) f = 'fill'; // photo already wider than the canvas
+    return f;
+  }
+  // ---------- photo panel + colour (default for leaderboards and billboards) ----------
+  function splitGeom(z) {
+    const r = z.w / z.h;
+    if (r <= .75) { const h = Math.round(z.h * .58); return { x: 0, y: z.h - h, w: z.w, h, vertical: true }; }
+    const f = r >= 5 ? .34 : r >= 1.5 ? .44 : .5, w = Math.round(z.w * f); return { x: z.w - w, y: 0, w, h: z.h, vertical: false };
+  }
+  function lumOf(key) { // average lightness of a part group's visible pixels
+    const g = S.groups[key]; if (!g) return null; if (g.lum != null) return g.lum;
+    const c = mk(64, 64), x = c.getContext('2d', { willReadFrequently: true }); let sum = 0, wsum = 0;
+    for (const m of g.members) {
+      x.clearRect(0, 0, 64, 64); x.drawImage(m.canvas, 0, 0, 64, 64); const d = x.getImageData(0, 0, 64, 64).data;
+      for (let i = 0; i < d.length; i += 4) { const a = d[i + 3] / 255; sum += a * (.2126 * d[i] + .7152 * d[i + 1] + .0722 * d[i + 2]); wsum += a; }
+    }
+    return (g.lum = wsum ? sum / wsum : null);
+  }
+  function panelColour(c, vertical) { // colour from the photo where the panel meets it, pushed dark (light text) or light (dark text)
+    const cl = curClient(); if (S.bg === 'brand' && cl) return cl.color;
+    const one = mk(1, 1), x = one.getContext('2d', { willReadFrequently: true });
+    if (vertical) x.drawImage(S.plate, c.sx, c.sy, c.sw, Math.max(1, c.sh * .2), 0, 0, 1, 1); else x.drawImage(S.plate, c.sx, c.sy, Math.max(1, c.sw * .2), c.sh, 0, 0, 1, 1);
+    const [r, g, b] = x.getImageData(0, 0, 1, 1).data;
+    // WCAG contrast against the text's lightness; pick the darker or lighter version of the photo colour that reaches 4.5:1
+    const rel = (v) => { v /= 255; return v <= .03928 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4; }, lumC = (c) => .2126 * rel(c[0]) + .7152 * rel(c[1]) + .0722 * rel(c[2]);
+    const tl = lumOf('headline') ?? lumOf('cta') ?? lumOf('logo') ?? 255, tL = rel(tl);
+    const contrast = (c) => { const a = lumC(c); return (Math.max(a, tL) + .05) / (Math.min(a, tL) + .05); };
+    const shade = (t) => [r, g, b].map(v => t < 0 ? v * (1 + t) : v + (255 - v) * t);
+    let best = null;
+    for (const dir of [-1, 1]) for (let i = 0; i <= 20; i++) { const c = shade(dir * i / 20); if (contrast(c) >= 4.5) { if (!best || i < best.i) best = { c, i }; break; } }
+    const pc = best ? best.c : (tL > .18 ? [18, 18, 20] : [245, 245, 245]);
+    return `rgb(${pc.map(Math.round).join(',')})`;
+  }
+  function drawSplit(ctx, z, k) {
+    const W = z.w * k, H = z.h * k, gm = splitGeom(z), c = crop(Object.assign({}, z, { w: gm.w, h: gm.h, centerSubject: true }));
+    const px = Math.floor(gm.x * k), py = Math.floor(gm.y * k), pw = Math.ceil(W - px), ph = Math.ceil(H - py);
+    ctx.fillStyle = panelColour(c, gm.vertical); ctx.fillRect(0, 0, W, H);
+    const t = mk(pw, ph), tx = t.getContext('2d');
+    drawPart(tx, S.plate, c.sx, c.sy, c.sw, c.sh, 0, 0, pw, ph);
+    tx.globalCompositeOperation = 'destination-in';
+    const g = gm.vertical ? tx.createLinearGradient(0, 0, 0, ph * .28) : tx.createLinearGradient(0, 0, pw * .32, 0); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, '#000');
+    tx.fillStyle = g; tx.fillRect(0, 0, pw, ph);
+    ctx.drawImage(t, px, py);
+  }
+  function featherPhoto(P, k, W) { // the photo with soft left/right edges where it meets the extension
+    const w = Math.max(1, Math.round(P.pw * k)), h = Math.max(1, Math.round(P.ph * k)), c = mk(w, h), x = c.getContext('2d');
+    drawPart(x, S.plate, 0, 0, S.plate.width, S.plate.height, 0, 0, w, h);
+    const f = Math.max(2, w * .07), L = P.px * k > .5, R = (P.px + P.pw) * k < W - .5;
+    x.globalCompositeOperation = 'destination-in';
+    const g = x.createLinearGradient(0, 0, w, 0);
+    g.addColorStop(0, L ? 'rgba(0,0,0,0)' : '#000'); g.addColorStop(f / w, '#000'); g.addColorStop(1 - f / w, '#000'); g.addColorStop(1, R ? 'rgba(0,0,0,0)' : '#000');
+    x.fillStyle = g; x.fillRect(0, 0, w, h);
+    return c;
+  }
+  function drawExtended(ctx, z, k, style) {
+    const W = z.w * k, H = z.h * k, P = ext(z), px = P.px * k, py = P.py * k, pw = P.pw * k, ph = P.ph * k;
+    if (style === 'soft') {
+      // smooth colour continuation: push-pull fill of a small canvas with the photo placed and empty sides
+      const sw = Math.min(320, Math.round(W)), sk = sw / W, sh = Math.max(2, Math.round(H * sk)), sc = mk(sw, sh), sx = sc.getContext('2d');
+      drawPart(sx, S.plate, 0, 0, S.plate.width, S.plate.height, px * sk, py * sk, pw * sk, ph * sk);
+      pushPull(sc);
+      ctx.save(); ctx.filter = `blur(${Math.max(1, Math.round(H * .04))}px)`; ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+      ctx.restore(); const ob = Math.max(1, Math.round(H * .04)) * 3; ctx.fillStyle = S.avg; ctx.fillRect(0, 0, W, H);
+      ctx.save(); ctx.filter = `blur(${Math.max(1, Math.round(H * .04))}px)`; ctx.drawImage(sc, -ob, -ob, W + 2 * ob, H + 2 * ob); ctx.restore();
+    } else {
+      // mirror: (1) the photo's outermost columns stretched across each side and heavily blurred, so colour and
+      // vertical structure carry on; (2) a narrow mirrored strip of the photo's own edge at each seam, fading out.
+      // Only the edge is mirrored, so the subject is never duplicated.
+      ctx.fillStyle = S.avg; ctx.fillRect(0, 0, W, H);
+      const eSrc = Math.max(2, S.W0 * .04), rightRoom = W - (px + pw);
+      ctx.save(); ctx.filter = `blur(${Math.max(2, Math.round(H * .06))}px) brightness(.9)`;
+      if (px > .5) drawPart(ctx, S.plate, 0, 0, eSrc, S.H0, -H * .2, py, px + H * .2 + 4, ph);
+      if (rightRoom > .5) drawPart(ctx, S.plate, S.W0 - eSrc, 0, eSrc, S.H0, px + pw - 4, py, rightRoom + H * .2 + 4, ph);
+      ctx.restore();
+      const band = (side) => {
+        const room = side < 0 ? px : rightRoom; if (room <= .5) return;
+        const ms = Math.min(room, pw * .22);
+        const t = mk(Math.ceil(ms) + 2, Math.ceil(H)), tx = t.getContext('2d'), tw = t.width;
+        tx.save(); tx.filter = `blur(${Math.max(1, Math.round(H * .02))}px) brightness(.9)`;
+        // reflect the photo about the seam: left band's right edge = photo's left edge; right band's left edge = photo's right edge
+        if (side < 0) { tx.translate(tw, 0); tx.scale(-1, 1); drawPart(tx, S.plate, 0, 0, S.plate.width, S.plate.height, 0, py, pw, ph); }
+        else { tx.scale(-1, 1); drawPart(tx, S.plate, 0, 0, S.plate.width, S.plate.height, -pw, py, pw, ph); }
+        tx.restore();
+        // fade the mirror out away from the seam so it melts into the blurred cover
+        tx.globalCompositeOperation = 'destination-in';
+        const reach = tw;
+        const g = side < 0 ? tx.createLinearGradient(tw, 0, Math.max(0, tw - reach), 0) : tx.createLinearGradient(0, 0, reach, 0);
+        g.addColorStop(0, 'rgba(0,0,0,.95)'); g.addColorStop(1, 'rgba(0,0,0,0)'); tx.fillStyle = g; tx.fillRect(0, 0, tw, t.height);
+        ctx.drawImage(t, side < 0 ? px - tw + 1 : px + pw - 1, 0);
+      };
+      band(-1); band(1);
+    }
+    ctx.drawImage(featherPhoto(P, k, W), px, py);
+  }
+  function logoLum() { // average lightness of the logo's visible pixels, to pick a ground it reads on
+    const g = S.groups.logo; if (!g) return 0; if (g.lum != null) return g.lum;
+    const c = mk(64, 64), x = c.getContext('2d', { willReadFrequently: true });
+    let sum = 0, wsum = 0;
+    for (const m of g.members) {
+      x.clearRect(0, 0, 64, 64); x.drawImage(m.canvas, 0, 0, 64, 64); const d = x.getImageData(0, 0, 64, 64).data;
+      for (let i = 0; i < d.length; i += 4) { const a = d[i + 3] / 255; sum += a * (.2126 * d[i] + .7152 * d[i + 1] + .0722 * d[i + 2]); wsum += a; }
+    }
+    return (g.lum = wsum ? sum / wsum : 0);
+  }
+  function mainFits(z) { // every element of the original already sits inside this size's safe zone
+    const s = z.w / S.W0;
+    const R = safeRect(z);
+    for (const k in S.groups) {
+      const g = S.groups[k]; if (!g.pos) return false; const q = { x: g.b.x * s, y: g.b.y * s, w: g.b.w * s, h: g.b.h * s }, bl = bleedOf(k); // a piece the designer ran off an edge may touch that edge
+      if ((!bl.l && q.x < R.x - 1) || (!bl.r && q.x + q.w > R.x + R.w + 1) || (!bl.t && q.y < R.y - 1) || (!bl.b && q.y + q.h > R.y + R.h + 1) || (z.keep && overlaps(q, z.keep))) return false;
+    }
+    return true;
+  }
+  function asIs(z) { // export the finished main design itself (pixel-exact) instead of rebuilding
+    const M = mainImg(); if (!M || kindOf(z) !== 'orig' || z.useMain === false) return false;
+    if (Math.abs(M.width / M.height - z.w / z.h) > .012) return false;
+    if (Object.keys(z.over).length || Object.values(S.scale).some(v => v !== 1) || (z.fit && !['auto', 'fill'].includes(z.fit))) return false;
+    const ruleHidden = (k) => (k === 'logo' && z.rules.has('no-logo')) || (k === 'cta' && z.rules.has('no-cta'));
+    if (Object.keys(S.groups).some(k => ruleHidden(k)) || Object.keys(z.hide).some(k => z.hide[k] && S.groups[k])) return false;
+    if (Object.keys(S.groups).some(k => !z.hide[k] && !S.groups[k].pos)) return false; // a piece that isn't in the finished design would be missing from a copy
+    return true; // same shape as the finished design: ship the designer's own work (a badge still flags anything past the safe zone)
+  }
+  function compose(ctx, z, k) {
+    if (asIs(z)) { const M = mainImg(); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high'; drawPart(ctx, M, 0, 0, M.width, M.height, 0, 0, z.w * k, z.h * k); return rects(z); }
+    const W = z.w * k, H = z.h * k, c = crop(z);
+    if (kindOf(z) === 'logo') { // logo asset: logo alone on the client's colour, or a ground it reads on
+      ctx.fillStyle = (curClient() || {}).color || (logoLum() > 150 ? '#1c1b19' : '#ffffff'); ctx.fillRect(0, 0, W, H);
+    } else if (bgFit(z) === 'custom') { // the designer's own background for this size (e.g. Generative Expand), covering the canvas
+      const b = z.custom, s = Math.max(W / b.width, H / b.height), w = b.width * s, h = b.height * s;
+      ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high'; ctx.drawImage(b, (W - w) / 2, (H - h) / 2, w, h);
+    } else if (bgFit(z) === 'split') {
+      drawSplit(ctx, z, k);
+    } else if (S.bg !== 'brand' && (bgFit(z) === 'mirror' || bgFit(z) === 'soft')) {
+      drawExtended(ctx, z, k, bgFit(z));
+    } else if (S.bg === 'brand') { ctx.fillStyle = (curClient() || {}).color || S.avg; ctx.fillRect(0, 0, W, H); }
+    else if (S.bg === 'blur') {
+      ctx.fillStyle = S.avg; ctx.fillRect(0, 0, W, H);
+      ctx.save(); ctx.filter = `blur(${Math.max(2, Math.round(Math.max(W, H) * .025))}px)`;
+      const m = Math.max(W, H) * .06; drawPart(ctx, S.plate, c.sx, c.sy, c.sw, c.sh, -m, -m, W + 2 * m, H + 2 * m); ctx.restore();
+    } else if (c.full && S.plateFull) drawPart(ctx, S.plateFull, c.sx - S.fullRect.x, c.sy - S.fullRect.y, c.sw, c.sh, 0, 0, W, H);
+    else drawPart(ctx, S.plate, c.sx, c.sy, c.sw, c.sh, 0, 0, W, H);
+    const isLogo = kindOf(z) === 'logo';
+    if (S.darken && !isLogo) { ctx.fillStyle = `rgba(0,0,0,${S.darken / 100})`; ctx.fillRect(0, 0, W, H); }
+    const L = rects(z);
+    if (!isLogo && !z._deco && !z.grad) scrim(ctx, z, L, k);
+    if (!isLogo && z.grad) sizeGradient(ctx, z, L, k);
+    if (z._deco) { // designer layout extras: a brand-colour fade behind the text, and panels extended to the canvas edge
+      const D = z._deco;
+      if (D.fade) { const g = ctx.createLinearGradient(0, D.fade.y * k, 0, H); g.addColorStop(0, D.fade.c.replace('rgb', 'rgba').replace(')', ',0)')); g.addColorStop(.5, D.fade.c.replace('rgb', 'rgba').replace(')', ',.72)')); g.addColorStop(1, D.fade.c.replace('rgb', 'rgba').replace(')', ',.8)')); ctx.fillStyle = g; ctx.fillRect(0, D.fade.y * k, W, H - D.fade.y * k); }
+      for (const e of D.ext) { ctx.fillStyle = e.c; ctx.fillRect(Math.floor(e.x * k), Math.floor(e.y * k), Math.ceil(e.w * k) + 1, Math.ceil(e.h * k)); }
+    }
+    for (const key of drawOrder(z)) {
+      const q = L[key], g = S.groups[key]; if (!q || !g) continue;
+      const s = q.w / g.b.w;
+      for (const m of g.members) { const r = relOf(g, m); drawPart(ctx, m.canvas, 0, 0, m.canvas.width, m.canvas.height, (q.x + r.x * s) * k, (q.y + r.y * s) * k, m.box.w * s * k, m.box.h * s * k); }
+    }
+    return L;
+  }
+
+  // ---------- cards ----------
+  function freshState(sp) {
+    const hide = {};
+    if (sp.rules.has('no-logo')) hide.logo = true;
+    if (sp.rules.has('no-cta')) hide.cta = true;
+    if (sp.rules.has('logo-only')) for (const [r] of ROLES) if (r !== 'logo') hide[r] = true;
+    return { zoom: 1, cx: null, cy: null, over: {}, hide, sel: null, include: true, fmt: '', fit: 'auto', custom: null, epx: null, epy: null, useMain: true, layout: 'auto', aiNote: null, grad: null, multi: null, grpStart: null, zorder: null };
+  }
+  function buildCards() {
+    const host = $('sections'); host.innerHTML = ''; queue = [];
+    const on = SPEC.sizes.filter(sp => S.on[sp.net]);
+    if (!on.length) { host.innerHTML = '<p class="empty">Tick at least one network above.</p>'; S.sizes = []; summary(); return; }
+    const grids = {};
+    for (const net of [...new Set(on.map(sp => sp.net))]) {
+      const sec = document.createElement('section'), n = SPEC.nets[net];
+      sec.innerHTML = `<div class="row" style="justify-content:space-between;align-items:baseline;margin-bottom:var(--space-3);flex-wrap:wrap;gap:var(--space-2)"><h2></h2><span class="hint mono" style="min-width:0"></span><span class="row" style="gap:6px;flex-wrap:wrap"><button type="button" data-nall>Tick all</button><button type="button" data-nnone>Tick none</button><button type="button" data-ndl></button></span></div><div class="grid"></div>`;
+      { const nl = () => (canDownload ? 'Download ' : 'Get ') + n.name, nb = sec.querySelector('[data-ndl]'); nb.textContent = nl();
+        nb.onclick = () => downloadSet(S.sizes.filter(z => z.net === net && shippable(z)), slug(n.name), nb, nl);
+        const tick = (v) => { for (const z of S.sizes.filter(z => z.net === net)) { z.include = v; z.el.classList.toggle('off', !v); const cb = z.el.querySelector('[data-inzip]'); if (cb) cb.checked = v; } summary(); };
+        sec.querySelector('[data-nall]').onclick = () => tick(true); sec.querySelector('[data-nnone]').onclick = () => tick(false); }
+      sec.querySelector('h2').textContent = n.name;
+      sec.querySelector('.hint').textContent = `Max ${fmtKB(S.kb[net])} per file · ${n.rules.has('png') ? 'JPG or PNG' : 'JPG'}` + (n.rules.has('brand') ? ' · logo on every file' : '') + (n.rules.has('border') ? ' · 1px border on white backgrounds' : '');
+      host.appendChild(sec); grids[net] = sec.querySelector('.grid');
+    }
+    S.sizes = on.map(sp => { const st = S.state[sp.id] || (S.state[sp.id] = freshState(sp)); return Object.assign(st, sp, { res: null, ver: (st.ver || 0) + 1 }); });
+    for (const z of S.sizes) {
+      const el = document.createElement('article'); el.className = 'card'; if (!z.include) el.classList.add('off');
+      const pngOK = SPEC.nets[z.net].rules.has('png');
+      el.innerHTML = `
+        <header><b></b><span class="mono muted">${z.w}×${z.h}</span></header>
+        <div class="stage"><canvas tabindex="0"></canvas></div>
+        <div class="chips"></div>
+        <div class="badges"></div>
+        <div class="cardbtns" data-mainrow hidden><label class="chip hint"><input type="checkbox" data-usemain checked> Use the main design as-is (exact copy)</label></div>
+        <div class="cardbtns" data-fitrow>
+          <label class="chip hint">Photo fit
+            <select data-fit aria-label="Photo fit"><option value="auto">Auto</option><option value="fill">Fill (crop)</option><option value="split">Photo panel + colour</option><option value="mirror">Extend · mirror</option><option value="soft">Extend · soft</option><option value="custom">Custom background</option></select>
+          </label>
+          <label class="chip hint">Layout
+            <select data-layout aria-label="Layout"><option value="auto">Auto</option><option value="original">Like the original</option><option value="beside">Beside the subject</option><option value="template">Stacked / row</option><option value="gradient">Text on gradient</option></select>
+          </label>
+          <button type="button" data-a="custom" title="Use your own background for this size, e.g. a Photoshop Generative Expand or Canva Magic Expand export">Custom bg…</button>
+        </div>
+        <div class="cardbtns" data-partrow><span class="hint" data-partname>Click a part to resize or move it. Shift-click to pick several.</span>
+          <span data-partctl hidden style="display:contents"><input type="range" min="25" max="300" value="100" data-psize aria-label="Selected part size in this size" style="flex:1;min-width:90px;accent-color:var(--accent)"><span class="mono muted" data-pv>100%</span><button type="button" data-a="resetpart">Reset part</button></span>
+          <span data-stack hidden style="display:contents"><button type="button" data-a="fwd" title="Bring the selected part in front of the next one">Forward</button><button type="button" data-a="back" title="Send the selected part behind the previous one">Back</button></span>
+          <button type="button" data-a="selall">Select all</button>
+        </div>
+        <div class="cardbtns" data-alignrow hidden><span class="hint">Align</span>
+          <select data-alignto aria-label="Align to"><option value="canvas">to canvas</option><option value="each">to each other</option></select>
+          <button type="button" data-align="l" title="Align left edges">Left</button><button type="button" data-align="c" title="Align centres across">Centre</button><button type="button" data-align="r" title="Align right edges">Right</button>
+          <button type="button" data-align="t" title="Align top edges">Top</button><button type="button" data-align="m" title="Align middles">Middle</button><button type="button" data-align="b" title="Align bottom edges">Bottom</button>
+        </div>
+        <div class="cardbtns"><label class="chip hint">Gradient
+          <select data-grad aria-label="Gradient for this size"><option value="">None</option><option value="bottom">Bottom</option><option value="top">Top</option><option value="left">Left</option><option value="right">Right</option><option value="band">Behind text</option></select></label>
+        </div>
+        <div class="cardctl"><span class="hint">Photo zoom</span><input type="range" min="100" max="300" value="${Math.round(z.zoom * 100)}" aria-label="Photo zoom"><span class="mono muted zv">${Math.round(z.zoom * 100)}%</span></div>
+        <div class="cardbtns">
+          <label class="chip hint"><input type="checkbox" data-inzip ${z.include ? 'checked' : ''}> In ZIP</label>
+          ${pngOK ? '<select aria-label="Format for this size"><option value="">Default</option><option value="jpg">JPG</option><option value="png">PNG</option></select>' : '<span class="hint mono">JPG</span>'}
+          <button type="button" data-a="ai" hidden title="Claude designs this size's layout from your pieces and the original. Uses your Claude usage; takes 10–60 seconds.">Ask Claude for a layout</button>
+          <button type="button" data-a="reset">Reset</button>
+          <button type="button" data-a="dl">Download</button>
+        </div>`;
+      el.querySelector('header b').textContent = z.label;
+      z.el = el; z.cv = el.querySelector('canvas'); z.badges = el.querySelector('.badges'); z.chips = el.querySelector('.chips');
+      z.cv.setAttribute('aria-label', `${z.label} ${z.w} by ${z.h}. Click to edit: drag a part to move it, scroll to resize it; drag empty space or use arrow keys to pan the photo.`);
+      z.rng = el.querySelector('input[aria-label="Photo zoom"]'); z.zv = el.querySelector('.zv');
+      z.rng.oninput = () => { z.zoom = z.rng.value / 100; z.zv.textContent = z.rng.value + '%'; changed(z); };
+      el.querySelector('[data-inzip]').onchange = (e) => { z.include = e.target.checked; el.classList.toggle('off', !z.include); summary(); };
+      const fs = el.querySelector('select[aria-label="Format for this size"]'); if (fs) { fs.value = z.fmt; fs.onchange = (e) => { z.fmt = e.target.value; changed(z); }; }
+      const laySel = el.querySelector('[data-layout]'); laySel.value = z.layout || 'auto'; laySel.onchange = () => { z.layout = laySel.value; z.over = {}; changed(z); };
+      const fitSel = el.querySelector('[data-fit]');
+      if (kindOf(z) === 'logo') el.querySelector('[data-fitrow]').hidden = true;
+      const um = el.querySelector('[data-usemain]'); el.querySelector('[data-mainrow]').hidden = !(kindOf(z) === 'orig' && mainImg()); um.checked = z.useMain !== false;
+      um.onchange = () => { z.useMain = um.checked; changed(z); };
+      fitSel.value = z.fit;
+      fitSel.onchange = () => { if (fitSel.value === 'custom' && !z.custom) { pickCustom(z); fitSel.value = z.fit; return; } z.fit = fitSel.value; z.epx = z.epy = null; changed(z); };
+      el.querySelector('[data-a=custom]').onclick = () => pickCustom(z);
+      z.cv.addEventListener('dragover', (e) => { e.preventDefault(); });
+      z.cv.addEventListener('drop', async (e) => { e.preventDefault(); const f = [...e.dataTransfer.files].find(f => /^image\//.test(f.type)); if (f) setCustom(z, f); });
+      el.querySelector('[data-a=reset]').onclick = () => { resetSize(z); changed(z); };
+      { const ai = el.querySelector('[data-a=ai]'); ai.hidden = !S.sample || kindOf(z) === 'logo'; ai.onclick = () => askClaude(z, ai); }
+      el.querySelector('[data-a=dl]').onclick = async () => { const r = await ensure(z); if (!r) return; if (await saveFile(r.blob, fname(z, r.ext)) === 'unavailable') showSavePanel(await filesFor([z])); };
+      const ps = el.querySelector('[data-psize]');
+      ps.oninput = () => { // one part: scale about its centre; several: scale the group about its centre (from where it stood when picked)
+        const keys = selKeys(z).filter(k => rects(z)[k]);
+        if (keys.length > 1) {
+          const G = z.grpStart || (z.grpStart = Object.fromEntries(keys.map(k => [k, { ...rects(z)[k] }]))), v = ps.value / 100, bb = bbox(Object.values(G)), cx = bb.x + bb.w / 2, cy = bb.y + bb.h / 2;
+          for (const k of keys) { const o = G[k]; if (o) setOver(z, k, { x: cx + (o.x - cx) * v, y: cy + (o.y - cy) * v, w: o.w * v, h: o.h * v }); }
+        } else {
+          const k = z.sel; if (!k) return; const base = baseRect(z, k), cur = rects(z)[k]; if (!base || !cur) return;
+          const v = ps.value / 100, cx = cur.x + cur.w / 2, cy = cur.y + cur.h / 2, w = base.w * v, h = base.h * v;
+          z.over[k] = { x: (cx - w / 2) / z.w, y: (cy - h / 2) / z.h, w: w / z.w, h: h / z.h };
+        }
+        el.querySelector('[data-pv]').textContent = ps.value + '%'; drawPreview(z); clearTimeout(z.pt); z.pt = setTimeout(() => changed(z), 250);
+      };
+      el.querySelector('[data-a=resetpart]').onclick = () => { const keys = selKeys(z); if (keys.length) { keys.forEach(k => delete z.over[k]); z.grpStart = null; changed(z); } };
+      el.querySelector('[data-a=selall]').onclick = () => { const L = rects(z), keys = DRAW.filter(k => L[k]); z.multi = new Set(keys); z.sel = keys[0] || null; z.grpStart = null; drawPreview(z); };
+      el.querySelectorAll('[data-align]').forEach(b => { b.onclick = () => alignSel(z, b.dataset.align); });
+      el.querySelector('[data-a=fwd]').onclick = () => restack(z, 1); el.querySelector('[data-a=back]').onclick = () => restack(z, -1);
+      const gs = el.querySelector('[data-grad]'); gs.value = z.grad || ''; gs.onchange = () => { z.grad = gs.value || null; changed(z); };
+      interact(z); renderChips(z);
+      grids[z.net].appendChild(el);
+    }
+    invalidateAll();
+  }
+  function pickCustom(z) {
+    const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/png,image/jpeg,image/webp';
+    inp.onchange = () => { if (inp.files[0]) setCustom(z, inp.files[0]); }; inp.click();
+  }
+  async function setCustom(z, f) {
+    try { const b = await createImageBitmap(f), tb = trimBlank(b, b.width, b.height); z.custom = tb ? tb.canvas : b; if (tb) notify('That background had a white or transparent margin. It was trimmed automatically.'); } catch (e) { notify('That image could not be read. Try exporting it again as PNG or JPG.'); return; }
+    z.fit = 'custom'; z.el.querySelector('[data-fit]').value = 'custom'; changed(z);
+  }
+  // ---------- Ask Claude for a layout (only where the page may call Claude) ----------
+  const AI_ERR = { not_granted: 'Claude isn\'t allowed for this page. Allow it when asked, or use the automatic layouts.', sampling_disabled: 'Claude isn\'t available for this account.', rate_limited: 'Too many requests right now. Wait a minute, then try again.', session_expired: 'Please sign in to Claude again, then try again.', invalid_json: 'Claude\'s answer couldn\'t be read. Try again.', refused: 'Claude declined this request.', image_rejected: 'The design image couldn\'t be sent. Try again.' };
+  // House style learned from the designers' Canva resizes (see README "How our designers resize").
+  const HOUSE = `House style of this agency's designers (follow it unless the original clearly does otherwise):
+- The photo subject is the hero. Text never covers a face or the product, unless placing it on an object (a box, a bag) or over the product clearly looks better.
+- Text pieces form one aligned block on the side away from the subject: left-aligned when the subject is on the right, right-aligned when the subject is on the left. Tall sizes (Story, 300×600, 160×600) use a centred stack with the logo top-centre and the subject below.
+- When the subject is centred in a wide size (a model or a product), split the text: headline left of the subject, offer and button right of it.
+- Keep each client's corner homes consistent across sizes (see the client line). The badge and button stay together as one pair.
+- Wide (1200×628 and wider, up to about 3:1): the text takes about 40–50% of the width; the logo, badge or button may be dropped if space is tight (except where branding is required).
+- Story (9:16): text in the upper half below the top safe band, subject in the middle, button right under the text or just above the bottom safe band.
+- Banners (wider than 3:1) read left to right: headline large on the left, the subject next to it, logo and badge in a narrow column on the far right. 320×50: headline plus a small logo or badge; drop body copy.
+- When space runs out, drop in this order: date line, secondary tag or body copy, subhead, badge, button. Never drop the logo where branding is required.
+- E-commerce offers: keep a big number ("30% OFF") as the largest text piece.
+- Same-ratio sizes are scaled copies of the original layout.`;
+  const CLIENT_STYLE = [
+    [/muslimah|\bmc\b/i, 'Client The Muslimah Collection: MC monogram top-left; left-aligned serif title + huge "% OFF" + date on the empty side of the model photo; white SHOP NOW box bottom-left; in wide sizes split title left and offer right around the centred model.'],
+    [/mrm|royal\s*musk/i, 'Client Royal Musk: thin wordmark top-left (top-centre in Story); script accent + bold "UP TO 30% OFF" + outlined button on the empty side of the product photo; centre-aligned text in wide and Story sizes; wide sizes may drop the logo.'],
+    [/sooyu/i, 'Client SooyuSkin: logo top-centre; pink ribbon "% OFF" badge beside a bold black SALE lockup; products cut out on a pastel background; black pill BUY NOW centred at the bottom.'],
+  ];
+  const clientStyle = () => { const c = curClient(); if (!c) return ''; const hit = CLIENT_STYLE.find(([re]) => re.test(c.name)); return hit ? hit[1] : ''; };
+  async function askClaude(z, btn) {
+    if (!S.sample) return;
+    const keys = Object.keys(S.groups).filter(k => !z.hide[k]); if (!keys.length) { notify('Add some pieces first.'); return; }
+    const R = safeRect(z), Sb = subjOnCanvas(z), Fc = faceOnCanvas(z), r1 = (v) => Math.round(v);
+    const keepOver = z.over; z.over = {}; const baseL = rects(z); z.over = keepOver; // the automatic layout: Claude's starting point and the size floor
+    const pieces = keys.map(k => { const g = S.groups[k], b = g.b, q = baseL[k]; return { key: k, name: NAME[k], aspect: +(b.w / b.h).toFixed(3), originalCentre: g.pos ? { u: +((b.x + b.w / 2) / S.W0).toFixed(3), v: +((b.y + b.h / 2) / S.H0).toFixed(3) } : null, originalWidthShare: +(b.w / S.W0).toFixed(3), mayOverlapBody: overSubject(k), currentLayout: q ? { x: r1(q.x), y: r1(q.y), w: r1(q.w) } : null }; });
+    const rules = [z.rules.has('brand') ? 'The logo must be clearly visible (branding required).' : '', z.rules.has('copy-20') ? 'Mobile banner: keep text large enough to read.' : ''].filter(Boolean);
+    const prompt = `You are a senior advertising designer adapting one finished ad to a new size. Lay out the pieces on a ${z.w}×${z.h} px canvas.
+
+Canvas facts (pixels, origin top-left):
+- Safe zone: every piece must sit fully inside x=${r1(R.x)}, y=${r1(R.y)}, width=${r1(R.w)}, height=${r1(R.h)}.
+${z.keep ? `- Keep-out area (app buttons cover it), no piece may touch it: x=${r1(z.keep.x)}, y=${r1(z.keep.y)}, width=${r1(z.keep.w)}, height=${r1(z.keep.h)}.` : ''}
+- The background photo fills the canvas. ${Sb ? `Its main subject (product / people) is at x=${r1(Sb.x)}, y=${r1(Sb.y)}, width=${r1(Sb.w)}, height=${r1(Sb.h)}. Pieces marked mayOverlapBody sat over the subject in the original and may do so again; other pieces must not cover it.` : 'There is no marked subject.'}
+${Fc ? `- A face is at x=${r1(Fc.x)}, y=${r1(Fc.y)}, width=${r1(Fc.w)}, height=${r1(Fc.h)}: no piece may cover any of it.` : ''}
+${bgFit(z) === 'split' ? `- The photo only shows on the right/bottom panel; place every piece on the solid colour area outside x=${r1(splitGeom(z).x)}, y=${r1(splitGeom(z).y)}.` : ''}
+
+Pieces (each keeps its aspect ratio = width/height; you choose the width, height follows). originalCentre is where its centre sat in the original design (u across, v down, 0–1); originalWidthShare is its width as a share of the original's width; currentLayout is the tool's automatic layout for this size, already checked for overlaps:
+${JSON.stringify(pieces)}
+
+Start from currentLayout and improve it only where a designer would. Never make a piece narrower than 85% of its currentLayout width: small text is the most common failure.
+Design rules: no two pieces may overlap; keep the original's arrangement and hierarchy where the shape allows (headline the most prominent, logo clearly visible but smaller, button easy to find); balanced, deliberate spacing; align pieces to a shared edge or centre line; text pieces at least 12 px tall.${rules.length ? ' ' + rules.join(' ') : ''}${S.main || S.flat ? ' The attached image is the original design.' : ''}
+
+${HOUSE}${clientStyle() ? '\n' + clientStyle() : ''}
+
+Reply with only JSON in this shape: {"groups": {"<key>": {"x": number, "y": number, "w": number}, ...one entry per piece key...}, "note": "one short sentence on the layout idea"}`;
+    const opts = { cache: false };
+    try {
+      const lim = await S.sample.limits().catch(() => null), M = mainImg();
+      if (lim && lim.images && M) { const c = mk(Math.min(600, M.width), Math.round(Math.min(600, M.width) * M.height / M.width)); c.getContext('2d').drawImage(M, 0, 0, c.width, c.height); opts.images = await new Promise(r => c.toBlob(r, 'image/jpeg', .8)); }
+    } catch (e) { /* send without the image */ }
+    const label = btn.textContent; btn.disabled = true; btn.textContent = 'Claude is designing…';
+    try {
+      const res = await S.sample.json(prompt, opts);
+      const gs = res && res.groups; if (!gs || typeof gs !== 'object') throw { code: 'invalid_json' };
+      const over = {};
+      for (const k of keys) {
+        const q = gs[k]; if (!q) continue; const b = S.groups[k].b;
+        let w = Number(q.w), x = Number(q.x), y = Number(q.y); if (!(w > 4) || !isFinite(x) || !isFinite(y)) continue;
+        w = Math.min(w, z.w); const h = w * b.h / b.w; x = clamp(x, 0, z.w - w); y = clamp(y, 0, z.h - h);
+        over[k] = { x: x / z.w, y: y / z.h, w: w / z.w, h: h / z.h };
+      }
+      if (!Object.keys(over).length) throw { code: 'invalid_json' };
+      // check the answer before using it: no shrunken text, nothing over the face, no overlaps
+      const px = (k) => ({ x: over[k].x * z.w, y: over[k].y * z.h, w: over[k].w * z.w, h: over[k].h * z.h }), ks = Object.keys(over);
+      const tooSmall = ks.filter(k => baseL[k] && px(k).w < baseL[k].w * .8), onFace = Fc ? ks.filter(k => inter(px(k), Fc) > area(Fc) * .04) : [];
+      const clashes = ks.some((k, i) => ks.slice(i + 1).some(m => overlaps(px(k), px(m))));
+      if (tooSmall.length || onFace.length || clashes) {
+        notify(`Claude's layout was not used: ${tooSmall.length ? 'it made ' + tooSmall.map(k => NAME[k]).join(', ') + ' too small' : onFace.length ? 'it covered the face' : 'pieces overlapped'}. The automatic layout is kept.`);
+        return;
+      }
+      z.over = over; z.aiNote = String(res.note || 'Layout by Claude').slice(0, 200); changed(z);
+      notify('Claude: ' + z.aiNote);
+    } catch (e) {
+      if (e && e.code !== 'cancelled') notify(AI_ERR[e && e.code] || 'Claude couldn\'t make a layout this time. Try again in a moment.');
+      if (e && ['not_granted', 'sampling_disabled', 'not_declared', 'capability_disabled', 'capability_removed'].includes(e.code)) { S.sample = null; document.querySelectorAll('[data-a=ai]').forEach(b => { b.hidden = true; }); }
+    } finally { btn.disabled = false; btn.textContent = label; }
+  }
+  function resetSize(z) { const inc = z.include; Object.assign(z, freshState(z)); z.aiNote = null; z.include = inc; const fsel = z.el.querySelector('[data-fit]'); if (fsel) fsel.value = 'auto';
+    { const ls = z.el.querySelector('[data-layout]'); if (ls) ls.value = 'auto'; const fm = z.el.querySelector('select[aria-label="Format for this size"]'); if (fm) fm.value = ''; const um = z.el.querySelector('[data-usemain]'); if (um) um.checked = true; } z.rng.value = 100; z.zv.textContent = '100%'; const sc2 = z.el.querySelector('[data-grad]'); if (sc2) sc2.value = ''; renderChips(z); }
+  function renderChips(z) {
+    z.chips.innerHTML = '';
+    for (const k of DRAW) {
+      if (!S.groups[k] || (kindOf(z) === 'logo' && k !== 'logo')) continue;
+      const n = S.groups[k].members.length, b = document.createElement('button'); b.type = 'button';
+      b.textContent = NAME[k] + (n > 1 ? ` ×${n}` : '');
+      b.setAttribute('aria-pressed', String(!z.hide[k])); b.title = z.hide[k] ? `Show ${NAME[k]} in this size` : `Hide ${NAME[k]} in this size`;
+      b.onclick = () => { z.hide[k] = !z.hide[k]; if (z.hide[k]) { delete z.over[k]; if (z.multi) z.multi.delete(k); if (z.sel === k) z.sel = null; z.grpStart = null; } renderChips(z); changed(z); };
+      z.chips.appendChild(b);
+    }
+  }
+  // ---------- multi-select: move, resize and align several parts as one ----------
+  const selKeys = (z) => (z.multi && z.multi.size ? [...z.multi] : z.sel ? [z.sel] : []).filter(k => S.groups[k] && !z.hide[k]);
+  const bbox = (qs) => { const x0 = Math.min(...qs.map(q => q.x)), y0 = Math.min(...qs.map(q => q.y)); return { x: x0, y: y0, w: Math.max(...qs.map(q => q.x + q.w)) - x0, h: Math.max(...qs.map(q => q.y + q.h)) - y0 }; };
+  const setOver = (z, k, q) => { if (![q.x, q.y, q.w, q.h].every(Number.isFinite)) return; z.over[k] = { x: q.x / z.w, y: q.y / z.h, w: q.w / z.w, h: q.h / z.h }; };
+  const drawOrder = (z) => z.zorder ? [...z.zorder.filter(k => DRAW.includes(k)), ...DRAW.filter(k => !z.zorder.includes(k))] : DRAW.slice(); // back to front
+  function restack(z, dir) { // move the selected pieces one step forward (+1) or back (-1) among the pieces this size shows
+    const L = rects(z), order = drawOrder(z), shown = order.filter(k => L[k]), sel = selKeys(z).filter(k => L[k]); if (!sel.length) return;
+    const seq = shown.slice(); for (const k of (dir > 0 ? sel.slice().reverse() : sel)) { const i = seq.indexOf(k), j = i + dir; if (j < 0 || j >= seq.length || sel.includes(seq[j])) continue; [seq[i], seq[j]] = [seq[j], seq[i]]; }
+    z.zorder = [...seq, ...order.filter(k => !L[k])]; changed(z);
+  }
+  function alignSel(z, how) {
+    const L = rects(z), keys = selKeys(z).filter(k => L[k]), qs = keys.map(k => L[k]), toCanvas = (z.el.querySelector('[data-alignto]') || {}).value !== 'each';
+    if (!qs.length) return;
+    if (toCanvas) { // move the selection as one block to the safe area's edge or centre; its own arrangement stays
+      const B = bbox(qs), R = safeRect(z); let dx = 0, dy = 0;
+      if (how === 'l') dx = R.x - B.x; else if (how === 'r') dx = R.x + R.w - (B.x + B.w); else if (how === 'c') dx = R.x + (R.w - B.w) / 2 - B.x;
+      else if (how === 't') dy = R.y - B.y; else if (how === 'b') dy = R.y + R.h - (B.y + B.h); else if (how === 'm') dy = R.y + (R.h - B.h) / 2 - B.y;
+      for (const k of keys) { const q = L[k]; setOver(z, k, { x: q.x + dx, y: q.y + dy, w: q.w, h: q.h }); }
+      z.grpStart = null; changed(z); return;
+    }
+    if (qs.length < 2) { notify('Pick a second part with Shift-click to align parts to each other.'); return; }
+    const B = bbox(qs);
+    for (const k of keys) { const q = { ...L[k] }; if (!q) continue;
+      if (how === 'l') q.x = B.x; else if (how === 'r') q.x = B.x + B.w - q.w; else if (how === 'c') q.x = B.x + (B.w - q.w) / 2;
+      else if (how === 't') q.y = B.y; else if (how === 'b') q.y = B.y + B.h - q.h; else if (how === 'm') q.y = B.y + (B.h - q.h) / 2;
+      setOver(z, k, q); }
+    z.grpStart = null; changed(z);
+  }
+  function interact(z) {
+    let p = null;
+    const pt = (e) => { const r = z.cv.getBoundingClientRect(); return { x: (e.clientX - r.left) * z.w / r.width, y: (e.clientY - r.top) * z.h / r.height }; };
+    const hit = (q) => { const L = rects(z); return drawOrder(z).reverse().find(r => L[r] && q.x >= L[r].x && q.x <= L[r].x + L[r].w && q.y >= L[r].y && q.y <= L[r].y + L[r].h); };
+    z.cv.addEventListener('pointerdown', (e) => {
+      const q = pt(e), r = hit(q); try { z.cv.setPointerCapture(e.pointerId); } catch (_) {}
+      const fit = bgFit(z), add = e.shiftKey || e.ctrlKey || e.metaKey;
+      if (r && add) { // build a multi-selection
+        const m = new Set(selKeys(z)); if (m.has(r)) m.delete(r); else m.add(r); z.multi = m; z.sel = m.size ? (m.has(r) ? r : [...m][0]) : null; z.grpStart = null; p = null; drawPreview(z); return;
+      }
+      if (r) {
+        if (!(z.multi && z.multi.has(r))) { z.multi = new Set([r]); z.grpStart = null; }
+        const L = rects(z); p = { mode: 'el', r, q, o: L[r], os: Object.fromEntries(selKeys(z).filter(k => L[k]).map(k => [k, { ...L[k] }])) }; z.sel = r;
+      }
+      else if (fit === 'mirror' || fit === 'soft') { const P = ext(z); p = { mode: 'ext', q, px: P.px, py: P.py, free: P.free, over: P.ph - z.h }; z.sel = null; z.multi = null; }
+      else if (fit === 'custom') { p = null; z.sel = null; z.multi = null; }
+      else if (fit === 'split') { const gm = splitGeom(z), c = crop(Object.assign({}, z, { w: gm.w, h: gm.h, centerSubject: true })); p = { mode: 'bg', q, cx: c.cx, cy: c.cy, k: c.sw / gm.w, split: gm }; z.sel = null; z.multi = null; }
+      else { const c = crop(z); p = { mode: 'bg', q, cx: c.cx, cy: c.cy, k: c.sw / z.w }; z.sel = null; z.multi = null; }
+      drawPreview(z);
+    });
+    z.cv.addEventListener('pointermove', (e) => {
+      if (!p) return; const q = pt(e), dx = q.x - p.q.x, dy = q.y - p.q.y;
+      if (p.mode === 'el') { for (const [k, o] of Object.entries(p.os)) setOver(z, k, { x: o.x + dx, y: o.y + dy, w: o.w, h: o.h }); z.grpStart = null; }
+      else if (p.mode === 'ext') { z.epx = p.free > 0 ? clamp((p.px + dx) / p.free, 0, 1) : null; z.epy = p.over > 0 ? clamp(-(p.py + dy) / p.over, 0, 1) : null; }
+      else {
+        z.cx = (p.cx - dx * p.k) / S.W0; z.cy = (p.cy - dy * p.k) / S.H0;
+        const c = crop(p.split ? Object.assign({}, z, { w: p.split.w, h: p.split.h, centerSubject: true }) : z); z.cx = c.cx / S.W0; z.cy = c.cy / S.H0;
+      }
+      drawPreview(z);
+    });
+    const end = () => { if (p) { p = null; changed(z); } };
+    z.cv.addEventListener('pointerup', end); z.cv.addEventListener('pointercancel', end);
+    z.cv.addEventListener('wheel', (e) => {
+      if (document.activeElement !== z.cv && !e.ctrlKey && !e.metaKey) return; // let the page scroll; click the card first (or hold Ctrl) to resize with the wheel
+      e.preventDefault(); const r = hit(pt(e));
+      if (r) {
+        const L = rects(z), f = e.deltaY < 0 ? 1.06 : 1 / 1.06, keys = z.multi && z.multi.has(r) && z.multi.size > 1 ? [...z.multi] : [r];
+        const B = bbox(keys.map(k => L[k]).filter(Boolean)), cx = B.x + B.w / 2, cy = B.y + B.h / 2; // grow the group about its centre
+        for (const k of keys) { const o = L[k]; if (o) setOver(z, k, { x: cx + (o.x - cx) * f, y: cy + (o.y - cy) * f, w: o.w * f, h: o.h * f }); }
+        if (keys.length === 1) { z.multi = new Set([r]); } z.sel = r; z.grpStart = null; changed(z);
+      } else { z.rng.value = clamp(+z.rng.value - Math.sign(e.deltaY) * 10, 100, 300); z.rng.oninput(); }
+    }, { passive: false });
+    z.cv.addEventListener('keydown', (e) => {
+      const d = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key]; if (!d) return;
+      e.preventDefault(); const st = e.shiftKey ? .1 : .02, L = rects(z);
+      if (selKeys(z).some(k => L[k])) { for (const k of selKeys(z)) { const o = L[k]; if (o) setOver(z, k, { x: o.x + d[0] * z.w * st, y: o.y + d[1] * z.h * st, w: o.w, h: o.h }); } z.grpStart = null; }
+      else { const c = crop(z); z.cx = (c.cx + d[0] * c.sw * st) / S.W0; z.cy = (c.cy + d[1] * c.sh * st) / S.H0; const c2 = crop(z); z.cx = c2.cx / S.W0; z.cy = c2.cy / S.H0; }
+      changed(z);
+    });
+  }
+
+  function baseRect(z, k) { const o = z.over[k]; delete z.over[k]; const r = rects(z)[k]; if (o) z.over[k] = o; return r; }
+  function syncPartRow(z, L) {
+    const row = z.el && z.el.querySelector('[data-partrow]'); if (!row) return;
+    const keys = selKeys(z).filter(q => L[q]), k = keys.length === 1 ? keys[0] : null, ctl = row.querySelector('[data-partctl]'), name = row.querySelector('[data-partname]'), ps = row.querySelector('[data-psize]');
+    ctl.hidden = !keys.length; z.el.querySelector('[data-alignrow]').hidden = !keys.length; z.el.querySelector('[data-stack]').hidden = !keys.length;
+    name.textContent = keys.length > 1 ? `${keys.length} parts together: drag, scroll or slide to move and resize them as one` : k ? `${NAME[k]} size` : 'Click a part to resize or move it. Shift-click to pick several.';
+    if (k) { const base = baseRect(z, k), v = base ? Math.round(L[k].w / base.w * 100) : 100;
+      if (document.activeElement !== ps) ps.value = clamp(v, 25, 300); row.querySelector('[data-pv]').textContent = v + '%'; }
+    else if (keys.length > 1 && !z.grpStart && document.activeElement !== ps) { ps.value = 100; row.querySelector('[data-pv]').textContent = '100%'; }
+  }
+  function renderPartSizes() { // global sliders, one per part group the creative has
+    const box = $('partSizeRows'), keys = DRAW.filter(k => S.groups[k]); $('partSizes').hidden = !keys.length; box.innerHTML = '';
+    for (const k of keys) {
+      const lab = document.createElement('label'); lab.className = 'chip hint'; lab.style.gap = '6px';
+      lab.innerHTML = '<span style="min-width:72px"></span><input type="range" min="50" max="200" style="width:110px;accent-color:var(--accent)"><span class="mono" style="min-width:40px"></span><button type="button" style="min-height:24px;padding:1px 8px;font-size:11px">Reset</button>';
+      const [nm, rg, val, rs] = [lab.children[0], lab.children[1], lab.children[2], lab.children[3]];
+      nm.textContent = NAME[k]; rg.value = Math.round(sc(k) * 100); val.textContent = rg.value + '%'; rg.setAttribute('aria-label', NAME[k] + ' size in every size');
+      let t; const apply = () => { S.scale[k] = rg.value / 100; val.textContent = rg.value + '%'; S.sizes.forEach(drawPreview); clearTimeout(t); t = setTimeout(invalidateAll, 300); };
+      rg.oninput = apply; rs.onclick = () => { rg.value = 100; apply(); };
+      box.appendChild(lab);
+    }
+  }
+  function drawPreview(z) {
+    const boxW = Math.max(170, z.cv.parentElement.clientWidth - 16), boxH = 224;
+    const fitK = Math.min(boxW / z.w, boxH / z.h), dw = Math.max(1, Math.round(z.w * fitK)), dh = Math.max(1, Math.round(z.h * fitK));
+    const dpr = Math.min(2, window.devicePixelRatio || 1), k = fitK * dpr;
+    z.cv.style.width = dw + 'px'; z.cv.style.height = dh + 'px'; z.cv.width = Math.round(dw * dpr); z.cv.height = Math.round(dh * dpr);
+    const x = z.cv.getContext('2d'); const L = compose(x, z, k);
+    if ($('safe').checked) {
+      const R = safeRect(z), W = z.cv.width, H = z.cv.height, rx = R.x * k, ry = R.y * k, rw = R.w * k, rh = R.h * k;
+      x.save(); x.fillStyle = 'rgba(0,0,0,.28)';
+      x.fillRect(0, 0, W, ry); x.fillRect(0, ry + rh, W, H - ry - rh); x.fillRect(0, ry, rx, rh); x.fillRect(rx + rw, ry, W - rx - rw, rh);
+      x.setLineDash([5 * dpr, 4 * dpr]); x.lineWidth = dpr; x.strokeStyle = 'rgba(255,255,255,.9)';
+      const line = (x0, y0, x1, y1) => { x.beginPath(); x.moveTo(x0, y0); x.lineTo(x1, y1); x.stroke(); };
+      if (ry > 1) line(rx, ry + .5, rx + rw, ry + .5); if (ry + rh < H - 1) line(rx, ry + rh - .5, rx + rw, ry + rh - .5);
+      if (rx > 1) line(rx + .5, ry, rx + .5, ry + rh); if (rx + rw < W - 1) line(rx + rw - .5, ry, rx + rw - .5, ry + rh);
+      if (z.keep) { const q = z.keep; x.fillStyle = 'rgba(0,0,0,.28)'; x.fillRect(q.x * k, q.y * k, q.w * k, q.h * k); x.strokeRect(q.x * k, q.y * k, q.w * k, q.h * k); }
+      x.restore();
+    }
+    syncPartRow(z, L);
+    for (const s of selKeys(z)) { const q = L[s]; if (!q) continue; x.save(); x.lineWidth = 2 * dpr; x.strokeStyle = cssVar('--accent', '#c2410c'); x.strokeRect(q.x * k, q.y * k, q.w * k, q.h * k); x.restore(); }
+  }
+
+  // ---------- encoding ----------
+  // spec: "if the image has white or transparent background, please add 1 pixel border"
+  function addBorderIfWhite(cv) {
+    const x = cv.getContext('2d', { willReadFrequently: true }), W = cv.width, H = cv.height;
+    const rows = [x.getImageData(0, 0, W, 1).data, x.getImageData(0, H - 1, W, 1).data, x.getImageData(0, 0, 1, H).data, x.getImageData(W - 1, 0, 1, H).data];
+    let white = 0, n = 0;
+    for (const d of rows) for (let i = 0; i < d.length; i += 4) { n++; if (d[i + 3] < 128 || (d[i] > 240 && d[i + 1] > 240 && d[i + 2] > 240)) white++; }
+    if (white / n < .5) return false;
+    x.strokeStyle = '#bdbdbd'; x.lineWidth = 1; x.strokeRect(.5, .5, W - 1, H - 1); return true;
+  }
+  function blankEdges(cv, z) { // sides whose outer 2px are mostly white or transparent (safety net)
+    if (kindOf(z) === 'logo') return [];
+    const x = cv.getContext('2d', { willReadFrequently: true }), W = cv.width, H = cv.height, out = [];
+    const bands = { top: [0, 0, W, 2], bottom: [0, H - 2, W, 2], left: [0, 0, 2, H], right: [W - 2, 0, 2, H] };
+    for (const [k, b] of Object.entries(bands)) { const d = x.getImageData(...b).data; let n = 0, bl = 0; for (let i = 0; i < d.length; i += 4) { n++; if (d[i + 3] < 128 || (d[i] > 238 && d[i + 1] > 238 && d[i + 2] > 238)) bl++; } if (bl / n > .6) out.push(k); }
+    return out;
+  }
+  function extOf(z) { return SPEC.nets[z.net].rules.has('png') ? (z.fmt || S.fmt) : 'jpg'; }
+  function renderFull(z, ext) {
+    const cv = mk(z.w, z.h), x = cv.getContext('2d');
+    if (ext === 'jpg') { x.fillStyle = '#ffffff'; x.fillRect(0, 0, z.w, z.h); }
+    compose(x, z, 1);
+    const border = z.rules.has('border') && addBorderIfWhite(cv);
+    return { cv, border };
+  }
+  const toBlob = (cv, type, q) => new Promise(r => cv.toBlob(r, type, q));
+  async function encode(z) {
+    const ext = extOf(z), lim = limitBytes(z), { cv, border } = renderFull(z, ext);
+    const r = await encodeAt(cv, ext, lim); r.border = border; r.edges = border ? [] : blankEdges(cv, z); return r;
+  }
+  async function encodeAt(cv, ext, lim) {
+    if (ext === 'png') { const blob = await toBlob(cv, 'image/png'); return { blob, ext, q: null, over: lim != null && blob.size > lim }; }
+    // interpolation search on quality: usually 3-4 encodes instead of a full bisection
+    let hiQ = .95, hi = await toBlob(cv, 'image/jpeg', hiQ);
+    if (hi.size <= lim) return { blob: hi, ext, q: hiQ, over: false };
+    let loQ = .3, lo = await toBlob(cv, 'image/jpeg', loQ);
+    if (lo.size > lim) return { blob: lo, ext, q: loQ, over: true };
+    let best = { blob: lo, q: loQ };
+    for (let i = 0; i < 5 && hiQ - loQ > .015; i++) {
+      const t = (lim * .97 - lo.size) / (hi.size - lo.size);
+      const q = clamp(loQ + (hiQ - loQ) * t, loQ + .01, hiQ - .01), b = await toBlob(cv, 'image/jpeg', q);
+      if (b.size <= lim) { best = { blob: b, q }; loQ = q; lo = b; if (b.size > lim * .93) break; }
+      else { hiQ = q; hi = b; }
+    }
+    return { blob: best.blob, ext, q: best.q, over: false };
+  }
+
+  let queue = [], running = false, timer = null;
+  function changed(z) { drawPreview(z); z.res = null; z.ver++; badges(z); schedule([z]); }
+  function invalidateAll() { if (!S.plate || !S.sizes.length) return summary(); S.sizes.forEach(z => { drawPreview(z); z.res = null; z.ver++; badges(z); }); schedule(S.sizes); }
+  function schedule(list) { list.forEach(z => { if (!queue.includes(z)) queue.push(z); }); clearTimeout(timer); timer = setTimeout(run, 350); summary(); }
+  async function run() {
+    if (running) return; running = true;
+    try { while (queue.length) { const z = queue.shift(); if (!S.sizes.includes(z)) continue; try { await ensure(z); } catch (e) { console.error(e); } } }
+    finally { running = false; }
+  }
+  async function ensure(z) {
+    if (!S.plate) return null;
+    if (z.res && z.res.ver === z.ver) return z.res;
+    const ver = z.ver, r = await encode(z); r.ver = ver;
+    if (ver === z.ver) { z.res = r; badges(z); summary(); return r; }
+    return ensure(z);
+  }
+
+  function badges(z) {
+    const out = [], r = z.res, L = rects(z), all = Object.keys(S.groups), kind = kindOf(z);
+    if (!r) out.push('<span class="b info">compressing…</span>');
+    else {
+      const kb = r.blob.size / 1000, kbs = kb >= 1000 ? `${(kb / 1000).toFixed(1)} MB` : `${kb.toFixed(kb < 10 ? 1 : 0)} KB`;
+      out.push(`<span class="b ${r.over ? 'warn' : 'ok'}">${r.over ? 'Over' : 'OK'} · ${r.ext.toUpperCase()} ${kbs}</span>`);
+      if (r.q != null) out.push(`<span class="b info">q ${Math.round(r.q * 100)}</span>`);
+      if (r.over && r.ext === 'png') out.push('<button type="button" class="b warn" data-j>Switch to JPG</button>');
+      if (r.border) out.push('<span class="b info">1px border added</span>');
+      if (r.edges && r.edges.length) out.push(`<span class="b warn">White edge · ${r.edges.join(', ')} — fine only if the design is meant to sit on white</span>`);
+    }
+    if (kind === 'logo') {
+      out.push(S.groups.logo ? '<span class="b ok">Logo asset</span>' : '<span class="b warn">Needs a logo part · left out of the ZIP</span>');
+    } else if (all.length) {
+      const ruled = new Set([z.rules.has('no-logo') && 'logo', z.rules.has('no-cta') && 'cta'].filter(Boolean));
+      const hidden = all.filter(k => z.hide[k] && !ruled.has(k)).map(k => NAME[k]);
+      const shown = all.filter(k => !z.hide[k]).reduce((a, k) => a + S.groups[k].members.length, 0);
+      out.push(hidden.length ? `<span class="b warn">Hidden · ${hidden.join(', ')}</span>` : `<span class="b ok">All ${shown} parts placed</span>`);
+      if (ruled.size) {
+        const broke = [...ruled].filter(k => S.groups[k] && !z.hide[k]).map(k => NAME[k]);
+        out.push(broke.length ? `<span class="b warn">Spec: no ${broke.join(' / ')} on this size</span>` : `<span class="b info">Spec: no ${[...ruled].map(k => NAME[k]).join(' / ')}</span>`);
+      }
+    }
+    if (z.rules.has('brand') && kind !== 'logo' && !(S.groups.logo && !z.hide.logo)) out.push('<span class="b warn">Branding required · add the logo</span>');
+    if (z.rules.has('copy-20')) out.push('<span class="b info">Mobile: on-image copy ≤ 20 chars</span>');
+    else if (z.rules.has('copy-40') && kind !== 'logo') out.push('<span class="b info">On-image copy ≤ 40 chars</span>');
+    if (z.rules.has('story-copy')) out.push('<span class="b info">Copy: theme ≤ 22 · sub ≤ 15 · CTA ≤ 15 chars</span>');
+    if (z.rules.has('feed-copy')) out.push('<span class="b info">Copy: theme ≤ 50 · sub ≤ 45 · CTA ≤ 15 chars</span>');
+    const bleedsOut = (k, q) => { // a piece the designer ran off the edge may touch that edge; anything else must stay in the safe zone
+      const g = S.groups[k], R = safeRect(z); if (!g || !g.pos) return outsideSafe(z, q); const bl = bleedOf(k);
+      if (z._bleedOK && z._bleedOK.has(k)) return q.y < R.y - 1 || q.y + q.h > R.y + R.h + 1 || !!(z.keep && overlaps(q, z.keep));
+      return (!bl.l && q.x < R.x - 1) || (!bl.r && q.x + q.w > R.x + R.w + 1) || (!bl.t && q.y < R.y - 1) || (!bl.b && q.y + q.h > R.y + R.h + 1) || !!(z.keep && overlaps(q, z.keep));
+    };
+    if (kind !== 'orig' && kind !== 'logo') { const ks = Object.keys(L), pairs = []; for (let i = 0; i < ks.length; i++) for (let j = i + 1; j < ks.length; j++) if (overlaps(L[ks[i]], L[ks[j]])) pairs.push(NAME[ks[i]] + ' / ' + NAME[ks[j]]); if (pairs.length) out.push(`<span class="b warn">Overlapping · ${pairs.join(', ')}</span>`); const left = DECOS.filter(k => S.groups[k] && !z.hide[k] && !L[k]); if (left.length) out.push(`<span class="b">No room for ${left.map(k => NAME[k]).join(', ')} · left out</span>`); }
+    const outside = Object.entries(L).filter(([k, q]) => bleedsOut(k, q)).map(([k]) => NAME[k]);
+    if (outside.length) out.push(`<span class="b warn">Outside safe zone · ${outside.join(', ')}</span>`);
+    const up = Object.entries(L).filter(([k, q]) => { const g = S.groups[k]; return g && q.w / g.b.w > 1.3 && g.members.some(m => m.canvas.width < m.box.w * q.w / g.b.w / 1.3); }).map(([k]) => NAME[k]);
+    if (up.length) out.push(`<span class="b warn">Upscaled · ${up.join(', ')}</span>`);
+    const tiny = Object.entries(L).filter(([k, q]) => TEXTY.includes(k) && Math.min(...S.groups[k].members.map(m => m.box.h)) * q.h / S.groups[k].b.h < 9).map(([k]) => NAME[k]);
+    if (tiny.length) out.push(`<span class="b warn">Too small to read · ${tiny.join(', ')}</span>`);
+    const c = crop(z), fit = bgFit(z);
+    if (fit === 'mirror' || fit === 'soft') out.push(`<span class="b info">Photo extended · ${fit === 'mirror' ? 'mirror' : 'soft'}</span>`);
+    if (fit === 'custom') out.push('<span class="b info">Custom background</span>');
+    if (fit === 'split') out.push('<span class="b info">Photo panel + colour</span>');
+    if (z.aiNote && Object.keys(z.over).length) out.push(`<span class="b ok" title="${esc(z.aiNote)}">Layout by Claude</span>`);
+    { const lu = z._layoutUsed, nm = lu === 'original' ? 'like the original' : lu && lu.startsWith('beside') ? 'beside the subject (' + lu.slice(7) + ')' : lu === 'fallback' ? 'stacked (the chosen layout didn\'t fit)' : null; if (nm && kind !== 'logo' && !asIs(z)) out.push(`<span class="b info">Layout: ${nm}</span>`); }
+    if (asIs(z)) out.push(mainFits(z) ? '<span class="b ok">Main design as-is · exact copy</span>' : '<span class="b warn">Exact copy · the main design crosses this size\'s safe zone (untick "Use the main design as-is" to rebuild)</span>');
+    else if (kind === 'orig' && mainImg() && z.useMain !== false && !mainFits(z)) out.push('<span class="b info">Rebuilt: the main design crosses this size\'s safe zone</span>');
+    if (fit !== 'fill') { /* whole photo is visible (or replaced): no crop warnings */ }
+    else if (S.subject && kind !== 'logo') { const sb = S.subject, vis = (Math.min(sb.x + sb.w, c.sx + c.sw) - Math.max(sb.x, c.sx)) * (Math.min(sb.y + sb.h, c.sy + c.sh) - Math.max(sb.y, c.sy)) / (sb.w * sb.h); if (vis < .7) out.push(`<span class="b warn">Subject ${Math.max(0, Math.round(vis * 100))}% in view</span>`); }
+    if (fit === 'fill' && c.s > 1.05 && kind !== 'logo') out.push(`<span class="b warn">Photo upscaled ×${c.s.toFixed(1)}</span>`);
+    z.badges.innerHTML = out.join('');
+    const j = z.badges.querySelector('[data-j]'); if (j) j.onclick = () => { z.fmt = 'jpg'; const s = z.el.querySelector('select[aria-label="Format for this size"]'); if (s) s.value = 'jpg'; changed(z); };
+  }
+
+  const shippable = (z) => z.include && !(kindOf(z) === 'logo' && !S.groups.logo); // a logo asset with no logo would be a blank file
+  let busy = false;
+  function summary() {
+    const nets = SPEC ? Object.keys(SPEC.nets).filter(k => S.on[k]) : [];
+    $('sum').textContent = nets.length ? nets.map(k => `${SPEC.nets[k].name} ${fmtKB(S.kb[k])}`).join(' · ') : 'No network selected';
+    if (!S.plate || !S.sizes.length) { $('sumNote').textContent = 'Load a creative to start.'; $('zip').disabled = $('canva').disabled = true; return; }
+    const inc = S.sizes.filter(shippable), ready = inc.filter(z => z.res && z.res.ver === z.ver), over = ready.filter(z => z.res.over);
+    $('zip').disabled = $('canva').disabled = busy || !inc.length; document.querySelectorAll('[data-ndl]').forEach(b => { b.disabled = busy; });
+    $('sumNote').textContent = (canDownload ? `${inc.length} files in ZIP, one folder per network · ` : `${inc.length} files, saved one by one on this page · `) + `${ready.length}/${inc.length} compressed` + (over.length ? ` · ${over.length} over the limit` : '');
+  }
+  function fname(z, ext) {
+    const c = curClient(), tag = z.id.replace(/-\d+x\d+$/, '');
+    return [c ? slug(c.name) : null, slug($('cname').value), tag, `${z.w}x${z.h}`].filter(Boolean).join('_') + '.' + ext;
+  }
+
+  let canDownload = true;
+  $('saveClose').onclick = () => { $('savePanel').hidden = true; saveUrls.forEach(u => URL.revokeObjectURL(u)); saveUrls = []; };
+  async function downloadSet(zs, tag, btn, label) { // ZIP of the given sizes, or the Save files panel when downloads aren't available
+    if (!zs.length) { notify('No sizes are ticked In ZIP here.'); return; }
+    if (busy) return;
+    // over-limit files: say which, and only go ahead on a second click
+    const over = zs.filter(z => z.res && z.res.ver === z.ver && z.res.over);
+    if (over.length && btn.dataset.armed !== '1') { btn.dataset.armed = '1'; notify(`${over.length} file${over.length > 1 ? 's are' : ' is'} over the limit: ${over.map(z => z.label + ' ' + z.w + '×' + z.h).join(', ')}. Use "Switch to JPG" on ${over.length > 1 ? 'those cards' : 'that card'}, or click again to download anyway.`); setTimeout(() => { delete btn.dataset.armed; }, 8000); return; }
+    delete btn.dataset.armed;
+    busy = true; btn.disabled = true; btn.textContent = 'Preparing…';
+    try {
+      if (!canDownload || !window.JSZip) { showSavePanel(await filesFor(zs)); return; }
+      const zip = new JSZip();
+      for (const z of zs) { const r = await ensure(z); if (!r) throw new Error('stopped'); zip.folder(SPEC.nets[z.net].name).file(fname(z, r.ext), r.blob); }
+      const blob = await zip.generateAsync({ type: 'blob' }), c = curClient();
+      if (await saveFile(blob, [c ? slug(c.name) : null, slug($('cname').value), tag].filter(Boolean).join('_') + '.zip') === 'unavailable') { canDownload = false; showSavePanel(await filesFor(zs)); }
+    } catch (e) { notify('The download stopped because the creative changed. Try again.'); } finally { busy = false; btn.disabled = false; btn.textContent = label(); summary(); }
+  }
+  $('zip').onclick = () => downloadSet(S.sizes.filter(shippable), 'all-sizes', $('zip'), () => canDownload ? 'Download ZIP' : 'Get all files');
+  // ---------- Send to Canva: save the exact ZIP files to the page's db as a batch; Claude builds the Canva design from it ----------
+  // Layout: exports/<batch> = {batch, client, creative, createdAt, status, files:[{idx,name,net,w,h,mime,bytes,chunks}]}
+  //         exports/<batch>/chunks/<idx>-<n> = {d: base64 slice}. See README "Export to Canva".
+  const CHUNK = 190000;
+  const b64 = (blob) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1] || ''); r.onerror = () => rej(r.error); r.readAsDataURL(blob); });
+  const wait = (ms) => new Promise(r => setTimeout(r, ms));
+  async function put(ref, body) { // one retry on transient errors, a pause on rate limits
+    try { await ref.set(body); }
+    catch (e) { if (e && (e.code === 'unavailable' || e.code === 'resource_exhausted')) { await wait(e.code === 'unavailable' ? 600 : 3000); await ref.set(body); } else throw e; }
+  }
+  function batchId() {
+    const c = curClient(), d = new Date(), p = (n) => String(n).padStart(2, '0');
+    const head = [c ? slug(c.name) : 'creative', slug($('cname').value).split(/[-_]/)[0]].filter(Boolean).join('-').slice(0, 28);
+    return `${head}-${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`.toLowerCase().replace(/[^a-z0-9-]/g, '');
+  }
+  $('canva').onclick = async () => {
+    const db = S.xdb; if (!db || busy) return;
+    const btn = $('canva'); busy = true; btn.disabled = true; $('canvaDone').hidden = true;
+    const list = S.sizes.filter(shippable), id = batchId(), files = [], c = curClient();
+    try {
+      for (const [i, z] of list.entries()) {
+        btn.textContent = `Saving ${i + 1}/${list.length}…`;
+        const r = await ensure(z); if (!r) throw new Error('stopped'); const data = await b64(r.blob), n = Math.max(1, Math.ceil(data.length / CHUNK));
+        for (let k = 0; k < n; k++) await put(db.doc(`exports/${id}/chunks/${i}-${k}`), { d: data.slice(k * CHUNK, (k + 1) * CHUNK) });
+        files.push({ idx: i, name: fname(z, r.ext), net: SPEC.nets[z.net].name, w: z.w, h: z.h, mime: r.blob.type || (r.ext === 'png' ? 'image/png' : 'image/jpeg'), bytes: r.blob.size, chunks: n });
+      }
+      await put(db.doc('exports/' + id), { batch: id, client: c ? c.name : '', creative: $('cname').value || '', createdAt: new Date().toISOString(), status: 'ready', files });
+      const ask = `Export batch ${id} to Canva`;
+      $('canvaId').textContent = id; $('canvaAsk').textContent = ask; $('canvaDone').hidden = false;
+      notify(`Saved ${files.length} files as batch ${id}.`);
+    } catch (e) {
+      notify(e && e.code === 'quota_exceeded' ? 'The tool\'s storage is full. Ask Claude to clear exported batches, then try again.' : `Couldn't save the batch${e && e.code ? ' (' + e.code + ')' : ''}. Try again in a moment.`);
+    } finally { busy = false; btn.textContent = 'Send to Canva'; summary(); }
+  };
+  $('canvaCopy').onclick = () => {
+    const t = $('canvaAsk').textContent, sel = () => { const r = document.createRange(); r.selectNodeContents($('canvaAsk')); const s = getSelection(); s.removeAllRanges(); s.addRange(r); };
+    try { navigator.clipboard.writeText(t).then(() => notify('Copied. Paste it to Claude.'), sel); } catch (e) { sel(); }
+  };
+  $('resetAll').onclick = () => { S.sizes.forEach(resetSize); invalidateAll(); };
+  $('fmt').onchange = (e) => { S.fmt = e.target.value; S.sizes.filter(z => SPEC.nets[z.net].rules.has('png')).forEach(changed); };
+  $('bg').onchange = (e) => { S.bg = e.target.value; invalidateAll(); };
+  $('scrim').onchange = (e) => { S.scrim = e.target.value; invalidateAll(); };
+  const hexRgb = (h) => `rgb(${parseInt(h.slice(1, 3), 16)},${parseInt(h.slice(3, 5), 16)},${parseInt(h.slice(5, 7), 16)})`;
+  let ft; $('fadeC').oninput = (e) => { S.fadeColor = hexRgb(e.target.value); $('fadeAuto').setAttribute('aria-pressed', 'false'); clearTimeout(ft); ft = setTimeout(invalidateAll, 200); };
+  $('fadeAuto').onclick = () => { S.fadeColor = null; $('fadeAuto').setAttribute('aria-pressed', 'true'); invalidateAll(); };
+  let dt; $('darken').oninput = (e) => { S.darken = +e.target.value; $('darkenV').textContent = S.darken + '%'; clearTimeout(dt); dt = setTimeout(invalidateAll, 200); };
+  $('safe').onchange = () => S.sizes.forEach(drawPreview);
+  let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { if (S.plate) { drawSource(); S.sizes.forEach(drawPreview); } }, 150); });
+
+  if (/^(localhost|127.0.0.1)$/.test(location.hostname)) window.__rz = { S, renderFull, bgFit, kindOf, changed, asIs, rects, subjOnCanvas, autoSubject, registerPhoto };
+  (async () => {
+    SPEC = buildSpec({ ...FALLBACK }); for (const k in SPEC.nets) S.kb[k] = SPEC.nets[k].kb; renderNets();
+    setMode('layers');
+    await loadTokens();
+    summary(); renderClients(); loadClients();
+    cap('db').then(db => { S.xdb = db || null; $('canva').hidden = !S.xdb; });
+    cap('downloads').then(dl => { if (!dl) { canDownload = false; $('zip').textContent = 'Get all files'; summary(); } });
+    cap('sample').then(fn => { S.sample = fn || null; if (S.sample) document.querySelectorAll('.card').forEach(c => { const b = c.querySelector('[data-a=ai]'); if (b && !c.querySelector('header').textContent.includes('Logo ')) b.hidden = false; }); });
+  })();
+})();
+</script>
+
+</body></html>
