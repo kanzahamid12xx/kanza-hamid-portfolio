@@ -1,0 +1,8 @@
+# Paid media strategy, Meta Ads, campaign setup and optimization, lead generation and ecommerce campaigns
+# Creative strategy, copywriting, content writing, graphic design, art direction and shoot management
+# Email marketing, social media management, presentation design, event marketing, registrations and partnerships
+# Marketing consulting, event coordination, AI agents, creative automation, multi-format templates and team workflow dashboards
+
+User-agent: *
+Allow: /
+Sitemap: https://kanza-hamid-portfolio.vercel.app/sitemap.xml
