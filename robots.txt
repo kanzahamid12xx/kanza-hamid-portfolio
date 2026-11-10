@@ -1,3 +1,18 @@
+# Kanza Hamid - paid media specialist and marketing consultant
+# Public workflow examples and interactive demos
+# Paid media - Compare lead generation campaigns by cost per lead and ecommerce campaigns by purchases and return on ad spend. Open a category to see the reporting period and campaign results.
+# https://kanza-hamid-portfolio.vercel.app/#brands
+# Creative strategy and copy - Explore how a campaign hook becomes copy and a brief for the designer.
+# https://kanza-hamid-portfolio.vercel.app/#creative-strategy
+# Post Designer - Start with a background, edit the headline and brand elements, then preview layouts for different ad placements.
+# https://kanza-hamid-portfolio.vercel.app/post-designer.html
+# Creative Resizer - Adapt a creative to multiple sizes and check the composition for each placement.
+# https://kanza-hamid-portfolio.vercel.app/creative-resizer.html
+# Team workflow dashboard - Assign creative work, track its status and review team output.
+# https://kanza-hamid-portfolio.vercel.app/creative-team-demo.html
+# Design system - Use reusable templates to keep layouts consistent across a series of campaign assets.
+# https://kanza-hamid-portfolio.vercel.app/all-brands-studio.html
+#
 # Paid media strategy, Meta Ads, campaign setup and optimization, lead generation and ecommerce campaigns
 # Creative strategy, copywriting, content writing, graphic design, art direction and shoot management
 # Email marketing, social media management, presentation design, event marketing, registrations and partnerships
