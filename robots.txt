@@ -18,6 +18,13 @@
 # Email marketing, social media management, presentation design, event marketing, registrations and partnerships
 # Marketing consulting, event coordination, AI agents, creative automation, multi-format templates and team workflow dashboards
 
+# Fashion editorial scenes - I built a workflow that pairs each model portrait with an outfit reference to create a full-length look. It brings three looks into one group portrait. A separate scene reference can guide the lighting, setting and poses.
+# https://kanza-hamid-portfolio.vercel.app/#fashion-editorial
+# Multi-product banners - I built two paths for the same product photos. One composes a banner directly. The other uses a visual reference to guide the layout, then adapts that composition into square and vertical banners.
+# https://kanza-hamid-portfolio.vercel.app/#product-banners
+# Product demo videos - I built a workflow that combines a product photo and a model portrait into an opening frame. It uses that frame to plan the shots and voiceover for an eight-second product demo, generates the video, then extracts a still.
+# https://kanza-hamid-portfolio.vercel.app/#product-video
+
 User-agent: *
 Allow: /
 Sitemap: https://kanza-hamid-portfolio.vercel.app/sitemap.xml
